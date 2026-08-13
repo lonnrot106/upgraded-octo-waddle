@@ -1,0 +1,18 @@
+# Node.js installation (local, not part of the project)
+node-v20.11.1-win-x64/
+
+# Node.js packages
+node_modules/
+
+# Installers and archives
+*.msi
+*.zip
+*.tar
+*.gz
+
+# Logs
+*.log
+
+# System files
+.DS_Store
+Thumbs.db

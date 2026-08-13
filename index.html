@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Butler</title>
+    <meta name="description" content="AI-Дворецкий, который организует ваш хаос.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
+    <link rel="icon" href="data:,">
+    <meta name="theme-color" content="#0a0a0a">
+</head>
+<body>
+    <header>
+        <div class="logo">BUTLER.</div>
+        <div class="header-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+            <button id="authBtn" class="icon-btn" title="Войти через Google" aria-label="Войти через Google">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            </button>
+            <button id="historyBtn" class="icon-btn" title="История планов" aria-label="История планов">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </button>
+            <button id="settingsBtn" class="icon-btn" title="Настройки API" aria-label="Настройки API">
+                <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <section class="input-section">
+            <h1>Dump your mind.</h1>
+            <p class="subtitle">Сбрось сюда всё: дела, время, настроение. Я всё организую.</p>
+            <label for="braindump" class="visually-hidden">Ваши мысли и планы</label>
+            <div class="textarea-wrapper" style="position: relative;">
+                <textarea id="braindump" placeholder="Например: завтра с 10 до 14 шарага, потом надо убраться, вечером свободен и хочу глянуть какой-нибудь крутой сай-фай..."></textarea>
+                <button id="micBtn" class="icon-btn mic-btn" title="Голосовой ввод" aria-label="Голосовой ввод" style="position: absolute; bottom: 15px; right: 15px; background: rgba(255,255,255,0.1); border-radius: 50%; padding: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" x2="12" y1="19" y2="22"></line></svg>
+                </button>
+            </div>
+            <button id="organizeBtn" class="primary-btn">Организовать хаос</button>
+        </section>
+
+        <section id="resultsSection" class="results-section hidden" aria-live="polite">
+            <div class="loader" id="loader" aria-hidden="false">
+                <div class="spinner"></div>
+                <p>Анализирую и планирую...</p>
+            </div>
+            
+            <div class="content hidden" id="outputContent">
+                <div class="grid">
+                    <div class="schedule-container">
+                        <h2>Расписание</h2>
+                        <ul id="scheduleList" class="schedule-list">
+                            <!-- Items will be injected here -->
+                        </ul>
+                    </div>
+                    <div class="recommendation-container">
+                        <h2>Рекомендация на вечер</h2>
+                        <div id="recommendationCard" class="recommendation-card">
+                            <span class="rec-type" id="recType">Фильм</span>
+                            <h3 id="recTitle">Interstellar</h3>
+                            <p id="recDescription">Потрясающий сай-фай Нолана с глубоким смыслом и визуалом.</p>
+                        </div>
+                    </div>
+                </div>
+                <button id="resetBtn" class="secondary-btn">Новый план</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal for API Key -->
+    <div id="apiKeyModal" class="modal hidden" role="dialog" aria-labelledby="modalTitle" aria-modal="true">
+        <div class="modal-content">
+            <h2 id="modalTitle">Gemini API Key</h2>
+            <p>Для работы ИИ-дворецкого нужен ключ от Google Gemini. Он сохраняется только в вашем браузере.</p>
+            <label for="apiKeyInput" class="visually-hidden">Ввод API ключа</label>
+            <input type="password" id="apiKeyInput" placeholder="AIzaSy...">
+            <div class="modal-actions">
+                <button id="saveApiBtn" class="primary-btn">Сохранить</button>
+                <button id="closeApiBtn" class="secondary-btn">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for History -->
+    <div id="historyModal" class="modal hidden" role="dialog" aria-labelledby="historyModalTitle" aria-modal="true">
+        <div class="modal-content history-modal-content">
+            <h2 id="historyModalTitle">История планов</h2>
+            <div id="historyListContainer" class="history-list-container">
+                <!-- History items will be injected here -->
+            </div>
+            <div class="modal-actions">
+                <button id="clearHistoryBtn" class="secondary-btn">Очистить</button>
+                <button id="closeHistoryBtn" class="primary-btn">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>

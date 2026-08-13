@@ -1,0 +1,459 @@
+/* ==========================================================================
+   CSS Variables
+   ========================================================================== */
+:root {
+    --bg-color: #0f1115;
+    --text-color: #e2e8f0;
+    --border-color: #2d333b;
+    --accent-color: #e2e8f0;
+    --secondary-text: #8b949e;
+    --hover-bg: #1f242c;
+    --modal-bg: rgba(15, 17, 21, 0.9);
+}
+
+/* ==========================================================================
+   Base Styles
+   ========================================================================== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+h1 {
+    font-size: 3rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    margin-bottom: 1rem;
+}
+
+h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+}
+
+h3 {
+    font-size: 2rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    line-height: 1.1;
+}
+
+/* ==========================================================================
+   Layout
+   ========================================================================== */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2rem 4rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4rem 2rem;
+    max-width: 1000px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.input-section {
+    width: 100%;
+    max-width: 600px;
+    text-align: center;
+    margin-bottom: 4rem;
+    transition: opacity 0.3s ease;
+}
+
+.results-section {
+    width: 100%;
+    opacity: 1;
+    transition: opacity 0.5s ease;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    width: 100%;
+    margin-bottom: 3rem;
+}
+
+@media (max-width: 768px) {
+    .grid {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+}
+
+/* ==========================================================================
+   Components
+   ========================================================================== */
+/* Logo */
+.logo {
+    font-weight: 600;
+    font-size: 1.25rem;
+    letter-spacing: -0.05em;
+}
+
+/* Typography elements */
+.subtitle {
+    color: var(--secondary-text);
+    margin-bottom: 2rem;
+}
+
+/* Forms */
+textarea {
+    width: 100%;
+    height: 150px;
+    padding: 1.5rem;
+    font-family: inherit;
+    font-size: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s ease;
+    margin-bottom: 1.5rem;
+    background: transparent;
+    color: var(--text-color);
+}
+
+textarea:focus {
+    border-color: var(--text-color);
+}
+
+input {
+    width: 100%;
+    padding: 1rem;
+    font-family: inherit;
+    border: 1px solid var(--border-color);
+    margin-bottom: 2rem;
+    outline: none;
+    background: transparent;
+    color: var(--text-color);
+}
+
+input:focus {
+    border-color: var(--text-color);
+}
+
+/* Buttons */
+button {
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 0;
+    transition: all 0.2s ease;
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    color: var(--text-color);
+    padding: 0.5rem;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-btn:hover {
+    background-color: var(--hover-bg);
+}
+
+.primary-btn, .secondary-btn {
+    padding: 1rem 2rem;
+}
+
+.primary-btn {
+    background-color: var(--text-color);
+    color: var(--bg-color);
+    border: 1px solid var(--text-color);
+}
+
+.primary-btn:hover {
+    background-color: transparent;
+    color: var(--text-color);
+}
+
+.secondary-btn {
+    background-color: transparent;
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.secondary-btn:hover {
+    border-color: var(--text-color);
+}
+
+/* Loader */
+.loader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 0;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--text-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Schedule List */
+.schedule-list {
+    list-style: none;
+}
+
+.schedule-list li {
+    display: flex;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.schedule-list .time {
+    font-weight: 600;
+    width: 80px;
+    flex-shrink: 0;
+}
+
+.schedule-list .task {
+    color: var(--secondary-text);
+}
+
+/* Recommendation Card */
+.recommendation-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.recommendation-card {
+    border: 1px solid var(--border-color);
+    padding: 2rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.rec-type {
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    color: var(--secondary-text);
+    margin-bottom: 0.5rem;
+}
+
+.recommendation-card p {
+    color: var(--secondary-text);
+}
+
+/* Modal */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--modal-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: var(--bg-color);
+    padding: 3rem;
+    border: 1px solid var(--border-color);
+    max-width: 500px;
+    width: 90%;
+}
+
+.modal-content h2 {
+    border: none;
+    padding: 0;
+    margin-bottom: 1rem;
+}
+
+.modal-content p {
+    color: var(--secondary-text);
+    margin-bottom: 2rem;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+/* ==========================================================================
+   Utilities
+   ========================================================================== */
+.hidden {
+    display: none !important;
+    opacity: 0;
+}
+
+.content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+/* A11y utility */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* History Modal Specifics */
+.history-modal-content {
+    max-width: 600px;
+}
+
+.history-list-container {
+    max-height: 60vh;
+    overflow-y: auto;
+    margin-bottom: 2rem;
+    padding-right: 1rem;
+}
+
+.history-list-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.history-list-container::-webkit-scrollbar-track {
+    background: var(--bg-color);
+}
+
+.history-list-container::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.history-item {
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    margin-bottom: 1rem;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.history-item:hover {
+    border-color: var(--text-color);
+    background-color: var(--hover-bg);
+}
+
+.history-item-date {
+    font-size: 0.85rem;
+    color: var(--secondary-text);
+    margin-bottom: 0.5rem;
+}
+
+.history-item-prompt {
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-empty {
+    text-align: center;
+    color: var(--secondary-text);
+    padding: 2rem 0;
+}
+
+/* ==========================================================================
+   New Features: Auth, Mic, Editable
+   ========================================================================== */
+
+#authBtn.logged-in svg {
+    stroke: #4ade80; /* Green color to indicate logged in state */
+}
+
+.mic-btn {
+    transition: all 0.3s ease;
+}
+
+.mic-btn.active {
+    background-color: rgba(239, 68, 68, 0.2) !important;
+    color: #ef4444;
+    animation: pulse-red 1.5s infinite;
+}
+
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.schedule-list input.editable {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0.25rem 0.5rem;
+    margin: -0.25rem -0.5rem; /* offset padding */
+    border-radius: 4px;
+    width: 100%;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+.schedule-list input.time.editable {
+    width: 90px;
+    font-weight: 600;
+}
+
+.schedule-list input.task.editable {
+    color: var(--secondary-text);
+}
+
+.schedule-list input.editable:hover {
+    border-color: var(--border-color);
+}
+
+.schedule-list input.editable:focus {
+    outline: none;
+    border-color: var(--text-color);
+    background-color: var(--hover-bg);
+}
