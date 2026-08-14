@@ -313,8 +313,9 @@ button {
 
 .schedule-list li {
     display: flex;
-    align-items: center;
-    padding: 1rem 0;
+    align-items: flex-start;
+    gap: 0.85rem;
+    padding: 0.85rem 0;
     border-bottom: 1px solid var(--border-color);
     animation: scheduleItemIn 0.38s var(--ease-spring) both;
     animation-delay: calc(var(--item-idx, 0) * 0.045s);
@@ -323,12 +324,24 @@ button {
 
 .schedule-list .time {
     font-weight: 600;
-    width: 80px;
+    font-size: 0.95rem;
+    color: var(--text-color);
+    min-width: 110px;
+    max-width: 140px;
     flex-shrink: 0;
+    white-space: nowrap;
+    line-height: 1.4;
+    transition: all 0.3s ease;
 }
 
 .schedule-list .task {
     color: var(--secondary-text);
+    flex: 1;
+    min-width: 0;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    word-break: break-word;
+    transition: all 0.3s ease;
 }
 
 .schedule-list .task.done,
@@ -339,10 +352,10 @@ button {
 }
 
 .schedule-list .check {
-    width: 20px;
-    height: 20px;
-    margin-right: 0.75rem;
-    margin-top: 2px;
+    width: 18px;
+    height: 18px;
+    margin-right: 0;
+    margin-top: 3px;
     flex-shrink: 0;
     cursor: pointer;
     accent-color: var(--primary-color, #4ade80);
@@ -721,36 +734,23 @@ button {
     100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
-.schedule-list input.editable {
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--text-color);
-    font-family: inherit;
-    font-size: inherit;
-    padding: 0.25rem 0.5rem;
-    margin: -0.25rem -0.5rem; /* offset padding */
-    border-radius: 4px;
-    width: 100%;
-    transition: border-color 0.2s, background-color 0.2s;
-}
-
-.schedule-list input.time.editable {
-    width: 90px;
-    font-weight: 600;
-}
-
-.schedule-list input.task.editable {
-    color: var(--secondary-text);
-}
-
-.schedule-list input.editable:hover {
-    border-color: var(--border-color);
-}
-
-.schedule-list input.editable:focus {
+.schedule-list .editable {
     outline: none;
-    border-color: var(--text-color);
-    background-color: var(--hover-bg);
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: -2px -6px;
+    transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+    cursor: text;
+}
+
+.schedule-list .editable:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.schedule-list .editable:focus {
+    background: var(--hover-bg);
+    color: var(--text-color);
+    box-shadow: 0 0 0 1px var(--border-color);
 }
 
 /* ==========================================================================
@@ -761,12 +761,12 @@ button {
     padding: 1.5rem;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: 8px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .followup-container:focus-within {
-    border-color: var(--text-color);
+    border-color: rgba(255, 255, 255, 0.25);
 }
 
 .followup-header {
@@ -801,32 +801,78 @@ button {
 
 .followup-input-wrapper {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
-    position: relative;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.35rem 0.5rem 0.35rem 0.9rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.followup-input-wrapper:focus-within {
+    border-color: var(--text-color);
+    box-shadow: 0 0 0 1px var(--text-color);
 }
 
 .followup-input-wrapper input {
-    margin-bottom: 0;
-    padding-right: 3.5rem;
     flex: 1;
-    border-radius: 4px;
+    min-width: 0;
+    margin-bottom: 0;
+    padding: 0.45rem 0.5rem 0.45rem 0;
+    border: none;
+    background: transparent;
+    color: var(--text-color);
+    font-size: 0.925rem;
+    outline: none;
+}
+
+.followup-input-wrapper input::placeholder {
+    color: var(--secondary-text);
+    opacity: 0.8;
+}
+
+.followup-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
 }
 
 .followup-mic-btn {
-    position: absolute;
-    right: 3.5rem;
-    top: 50%;
-    transform: translateY(-50%);
-    background: transparent;
-    padding: 6px;
-}
-
-.followup-send-btn {
-    padding: 0.75rem 1.25rem;
+    width: 34px;
+    height: 34px;
+    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--secondary-text);
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.followup-mic-btn:hover {
+    color: var(--text-color);
+    background-color: var(--hover-bg);
+}
+
+.followup-send-btn {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: var(--text-color);
+    color: var(--bg-color);
+    border: 1px solid var(--text-color);
+}
+
+.followup-send-btn:hover {
+    background: transparent;
+    color: var(--text-color);
 }
 
 .results-actions {

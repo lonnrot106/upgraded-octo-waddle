@@ -887,35 +887,59 @@ class UI {
             check.className = 'check';
             check.checked = !!item.done;
             check.setAttribute('aria-label', 'Отметить задачу выполненной');
+            
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'time editable' + (item.done ? ' done' : '');
+            timeSpan.contentEditable = 'true';
+            timeSpan.spellcheck = false;
+            timeSpan.setAttribute('role', 'textbox');
+            timeSpan.setAttribute('aria-label', 'Время задачи');
+            timeSpan.textContent = item.time;
+            
+            const taskSpan = document.createElement('span');
+            taskSpan.className = 'task editable' + (item.done ? ' done' : '');
+            taskSpan.contentEditable = 'true';
+            taskSpan.spellcheck = false;
+            taskSpan.setAttribute('role', 'textbox');
+            taskSpan.setAttribute('aria-label', 'Текст задачи');
+            taskSpan.textContent = item.task;
+
             check.addEventListener('change', () => {
-                this.currentData.schedule[index].done = check.checked;
+                const isChecked = check.checked;
+                this.currentData.schedule[index].done = isChecked;
+                timeSpan.classList.toggle('done', isChecked);
+                taskSpan.classList.toggle('done', isChecked);
                 SoundService.playPop();
-                if (this.onPlanToggle) this.onPlanToggle(this.currentPlanId, index, check.checked);
+                if (this.onPlanToggle) this.onPlanToggle(this.currentPlanId, index, isChecked);
                 this.updateProgress();
             });
             
-            const timeInput = document.createElement('input');
-            timeInput.className = 'time editable' + (item.done ? ' done' : '');
-            timeInput.value = item.time;
-            
-            const taskInput = document.createElement('input');
-            taskInput.className = 'task editable' + (item.done ? ' done' : '');
-            taskInput.value = item.task;
-            
             const saveEdit = () => {
-                this.currentData.schedule[index].time = timeInput.value;
-                this.currentData.schedule[index].task = taskInput.value;
+                const newTime = timeSpan.textContent.trim();
+                const newTask = taskSpan.textContent.trim();
+                if (newTime) this.currentData.schedule[index].time = newTime;
+                if (newTask) this.currentData.schedule[index].task = newTask;
                 if (this.onPlanEdit) this.onPlanEdit(this.currentPlanId, this.currentData);
             };
             
-            timeInput.addEventListener('blur', saveEdit);
-            taskInput.addEventListener('blur', saveEdit);
-            timeInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') timeInput.blur(); });
-            taskInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') taskInput.blur(); });
+            timeSpan.addEventListener('blur', saveEdit);
+            taskSpan.addEventListener('blur', saveEdit);
+            timeSpan.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    timeSpan.blur();
+                }
+            });
+            taskSpan.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    taskSpan.blur();
+                }
+            });
             
             li.appendChild(check);
-            li.appendChild(timeInput);
-            li.appendChild(taskInput);
+            li.appendChild(timeSpan);
+            li.appendChild(taskSpan);
             this.elements.scheduleList.appendChild(li);
         });
 
