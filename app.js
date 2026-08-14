@@ -8,7 +8,10 @@ import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/fireb
 // ============================================================================
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(err => {
+        navigator.serviceWorker.register('./sw.js').then((reg) => {
+            // Force checking for sw.js updates on each load
+            reg.update();
+        }).catch(err => {
             console.log('ServiceWorker registration failed: ', err);
         });
     });
