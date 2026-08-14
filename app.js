@@ -657,6 +657,33 @@ class UI {
         this.elements.weekPrevBtn.addEventListener('click', handlers.onWeekPrev);
         this.elements.weekNextBtn.addEventListener('click', handlers.onWeekNext);
 
+        // Backdrop click to close modals
+        [
+            { modal: this.elements.apiKeyModal, closeHandler: handlers.onCloseModal },
+            { modal: this.elements.historyModal, closeHandler: handlers.onCloseHistoryModal },
+            { modal: this.elements.weekModal, closeHandler: handlers.onCloseWeekModal }
+        ].forEach(({ modal, closeHandler }) => {
+            if (!modal) return;
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal && closeHandler) {
+                    closeHandler();
+                }
+            });
+        });
+
+        // Global Escape key to close open modals
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (this.isModalOpen(this.elements.apiKeyModal) && handlers.onCloseModal) {
+                    handlers.onCloseModal();
+                } else if (this.isModalOpen(this.elements.historyModal) && handlers.onCloseHistoryModal) {
+                    handlers.onCloseHistoryModal();
+                } else if (this.isModalOpen(this.elements.weekModal) && handlers.onCloseWeekModal) {
+                    handlers.onCloseWeekModal();
+                }
+            }
+        });
+
         // Follow-up events
         this.elements.followUpSendBtn.addEventListener('click', handlers.onFollowUpSend);
         this.elements.followUpMicBtn.addEventListener('click', handlers.onFollowUpMic);
@@ -682,6 +709,46 @@ class UI {
         }
     }
 
+    openModal(modalElement) {
+        if (!modalElement) return;
+        if (modalElement._closeTimeout) {
+            clearTimeout(modalElement._closeTimeout);
+            modalElement._closeTimeout = null;
+        }
+        modalElement.classList.remove('hidden');
+        modalElement.classList.remove('closing');
+        // Force reflow for CSS transition
+        void modalElement.offsetHeight;
+        modalElement.classList.add('is-open');
+    }
+
+    closeModal(modalElement, callback) {
+        if (!modalElement) {
+            if (callback) callback();
+            return;
+        }
+        if (modalElement.classList.contains('hidden') || modalElement.classList.contains('closing')) {
+            if (callback) callback();
+            return;
+        }
+        modalElement.classList.remove('is-open');
+        modalElement.classList.add('closing');
+
+        if (modalElement._closeTimeout) {
+            clearTimeout(modalElement._closeTimeout);
+        }
+        modalElement._closeTimeout = setTimeout(() => {
+            modalElement.classList.add('hidden');
+            modalElement.classList.remove('closing');
+            modalElement._closeTimeout = null;
+            if (callback) callback();
+        }, 260);
+    }
+
+    isModalOpen(modalElement) {
+        return modalElement && modalElement.classList.contains('is-open') && !modalElement.classList.contains('closing');
+    }
+
     showModal(currentKey, primaryModel, fallbackModel, fallbackEnabled, soundEnabled, currentTemperature, memoryFacts) {
         this.elements.apiKeyInput.value = currentKey;
         this.elements.primaryModelSelect.value = primaryModel;
@@ -691,7 +758,7 @@ class UI {
         this.elements.temperatureInput.value = currentTemperature;
         this.elements.temperatureValue.textContent = currentTemperature;
         this.renderMemoryTags(memoryFacts);
-        this.elements.apiKeyModal.classList.remove('hidden');
+        this.openModal(this.elements.apiKeyModal);
     }
 
     renderMemoryTags(facts) {
@@ -721,8 +788,8 @@ class UI {
         });
     }
 
-    hideModal() {
-        this.elements.apiKeyModal.classList.add('hidden');
+    hideModal(callback) {
+        this.closeModal(this.elements.apiKeyModal, callback);
     }
 
     getSettingsValues() {
@@ -813,6 +880,7 @@ class UI {
         this.elements.scheduleList.innerHTML = '';
         data.schedule.forEach((item, index) => {
             const li = document.createElement('li');
+            li.style.setProperty('--item-idx', index);
             
             const check = document.createElement('input');
             check.type = 'checkbox';
@@ -887,7 +955,7 @@ class UI {
         this.onHistoryPlanClick = onPlanClick;
         this.elements.historyListContainer.innerHTML = '';
         this.renderHistoryList(plans);
-        this.elements.historyModal.classList.remove('hidden');
+        this.openModal(this.elements.historyModal);
     }
 
     renderHistoryList(plans) {
@@ -920,16 +988,16 @@ class UI {
         }
     }
 
-    hideHistoryModal() {
-        this.elements.historyModal.classList.add('hidden');
+    hideHistoryModal(callback) {
+        this.closeModal(this.elements.historyModal, callback);
     }
 
     showWeekModal() {
-        this.elements.weekModal.classList.remove('hidden');
+        this.openModal(this.elements.weekModal);
     }
 
-    hideWeekModal() {
-        this.elements.weekModal.classList.add('hidden');
+    hideWeekModal(callback) {
+        this.closeModal(this.elements.weekModal, callback);
     }
 
     renderWeekDays(plans, monday, onPlanClick) {
