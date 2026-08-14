@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, doc, updateDoc, deleteDoc, onSnapshot, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, query, orderBy, doc, updateDoc, deleteDoc, onSnapshot, where, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging.js";
 
 // ============================================================================
@@ -9,7 +9,6 @@ import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/fireb
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js').then((reg) => {
-            // Force checking for sw.js updates on each load
             reg.update();
         }).catch(err => {
             console.log('ServiceWorker registration failed: ', err);
@@ -20,7 +19,6 @@ if ('serviceWorker' in navigator) {
 // ============================================================================
 // Firebase Config
 // ============================================================================
-// ВСТАВЬТЕ ВАШИ ДАННЫЕ FIREBASE СЮДА
 const firebaseConfig = {
     apiKey: "AIzaSyDw4MUBbihYWeYyRoy0ahxFjBdb6iyiGuM",
     authDomain: "baron-f8bd3.firebaseapp.com",
@@ -44,6 +42,79 @@ if (!isFirebaseMocked) {
 }
 
 // ============================================================================
+// Sound Service (Web Audio API)
+// ============================================================================
+class SoundService {
+    static init() {
+        if (!this.ctx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (AudioContext) {
+                this.ctx = new AudioContext();
+            }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+    }
+
+    static playPop() {
+        if (!Storage.getSoundEnabled()) return;
+        try {
+            this.init();
+            if (!this.ctx) return;
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(450, now);
+            osc.frequency.exponentialRampToValueAtTime(800, now + 0.04);
+
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+
+            osc.start(now);
+            osc.stop(now + 0.05);
+        } catch (e) {
+            console.debug('Audio error', e);
+        }
+    }
+
+    static playSuccess() {
+        if (!Storage.getSoundEnabled()) return;
+        try {
+            this.init();
+            if (!this.ctx) return;
+            const now = this.ctx.currentTime;
+            const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6 chord
+
+            notes.forEach((freq, i) => {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                const noteTime = now + (i * 0.08);
+
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, noteTime);
+
+                gain.gain.setValueAtTime(0.18, noteTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, noteTime + 0.35);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(noteTime);
+                osc.stop(noteTime + 0.35);
+            });
+        } catch (e) {
+            console.debug('Audio error', e);
+        }
+    }
+}
+
+// ============================================================================
 // Storage Module
 // ============================================================================
 class Storage {
@@ -55,12 +126,38 @@ class Storage {
         localStorage.setItem('gemini_api_key', key);
     }
 
-    static getModel() {
-        return localStorage.getItem('gemini_model') || 'gemini-2.5-flash';
+    static getPrimaryModel() {
+        return localStorage.getItem('gemini_primary_model') || 'gemini-3.5-flash-lite';
     }
 
-    static saveModel(model) {
-        localStorage.setItem('gemini_model', model);
+    static savePrimaryModel(model) {
+        localStorage.setItem('gemini_primary_model', model);
+    }
+
+    static getFallbackModel() {
+        return localStorage.getItem('gemini_fallback_model') || 'gemini-3.1-flash-lite';
+    }
+
+    static saveFallbackModel(model) {
+        localStorage.setItem('gemini_fallback_model', model);
+    }
+
+    static getFallbackEnabled() {
+        const val = localStorage.getItem('gemini_fallback_enabled');
+        return val === null ? true : val === 'true';
+    }
+
+    static saveFallbackEnabled(enabled) {
+        localStorage.setItem('gemini_fallback_enabled', String(enabled));
+    }
+
+    static getSoundEnabled() {
+        const val = localStorage.getItem('butler_sound_enabled');
+        return val === null ? true : val === 'true';
+    }
+
+    static saveSoundEnabled(enabled) {
+        localStorage.setItem('butler_sound_enabled', String(enabled));
     }
 
     static getTemperature() {
@@ -70,6 +167,73 @@ class Storage {
 
     static saveTemperature(temperature) {
         localStorage.setItem('gemini_temperature', temperature);
+    }
+
+    // Memory Management
+    static getMemoryFacts() {
+        const facts = localStorage.getItem('butler_memory_facts');
+        return facts ? JSON.parse(facts) : [];
+    }
+
+    static saveMemoryFacts(facts) {
+        const unique = Array.from(new Set(facts.map(f => f.trim()).filter(Boolean)));
+        localStorage.setItem('butler_memory_facts', JSON.stringify(unique));
+        this.syncMemoryWithCloud(unique);
+        return unique;
+    }
+
+    static addMemoryFacts(newFacts) {
+        if (!newFacts || !newFacts.length) return this.getMemoryFacts();
+        const current = this.getMemoryFacts();
+        newFacts.forEach(fact => {
+            const trimmed = fact.trim();
+            if (trimmed && !current.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
+                current.push(trimmed);
+            }
+        });
+        return this.saveMemoryFacts(current);
+    }
+
+    static removeMemoryFact(index) {
+        const current = this.getMemoryFacts();
+        if (index >= 0 && index < current.length) {
+            current.splice(index, 1);
+            return this.saveMemoryFacts(current);
+        }
+        return current;
+    }
+
+    static clearMemoryFacts() {
+        localStorage.removeItem('butler_memory_facts');
+        this.syncMemoryWithCloud([]);
+    }
+
+    static async syncMemoryWithCloud(facts) {
+        if (!isFirebaseMocked && auth && auth.currentUser) {
+            try {
+                const docRef = doc(db, `users/${auth.currentUser.uid}/settings`, 'memory');
+                await setDoc(docRef, { facts, updatedAt: Date.now() }, { merge: true });
+            } catch (e) {
+                console.error("Cloud memory sync failed", e);
+            }
+        }
+    }
+
+    static async loadMemoryFromCloud() {
+        if (!isFirebaseMocked && auth && auth.currentUser) {
+            try {
+                const docRef = doc(db, `users/${auth.currentUser.uid}/settings`, 'memory');
+                const snap = await getDoc(docRef);
+                if (snap.exists() && snap.data().facts) {
+                    const cloudFacts = snap.data().facts;
+                    const merged = this.addMemoryFacts(cloudFacts);
+                    return merged;
+                }
+            } catch (e) {
+                console.error("Failed to load cloud memory", e);
+            }
+        }
+        return this.getMemoryFacts();
     }
 
     static localDateString(ts) {
@@ -164,7 +328,6 @@ class Storage {
     }
 }
 
-// Вставьте VAPID-ключ из Firebase Console → Cloud Messaging → Web Push certificates
 const VAPID_KEY = 'YOUR_VAPID_KEY';
 
 // ============================================================================
@@ -219,19 +382,33 @@ class SpeechService {
 
             this.recognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript;
-                onResult(transcript);
+                if (this.currentHandler) {
+                    this.currentHandler(transcript);
+                } else if (onResult) {
+                    onResult(transcript);
+                }
             };
             this.recognition.onend = () => {
-                if (onEnd) onEnd();
-            }
+                if (this.currentEndHandler) {
+                    this.currentEndHandler();
+                } else if (onEnd) {
+                    onEnd();
+                }
+            };
         } else {
             this.recognition = null;
         }
     }
 
-    start() {
+    start(onResultCustom, onEndCustom) {
         if (this.recognition) {
-            this.recognition.start();
+            this.currentHandler = onResultCustom || null;
+            this.currentEndHandler = onEndCustom || null;
+            try {
+                this.recognition.start();
+            } catch(e) {
+                console.warn('Speech already running', e);
+            }
         } else {
             alert('Голосовой ввод не поддерживается в вашем браузере.');
         }
@@ -239,74 +416,167 @@ class SpeechService {
 }
 
 // ============================================================================
-// API Module
+// API Module with Fallback & Memory
 // ============================================================================
 class API {
     constructor() {
-        this.modelName = Storage.getModel();
+        this.primaryModel = Storage.getPrimaryModel();
+        this.fallbackModel = Storage.getFallbackModel();
+        this.fallbackEnabled = Storage.getFallbackEnabled();
         this.temperature = Storage.getTemperature();
     }
 
-    async generateScheduleAndRec(userInput, apiKey) {
-        const prompt = `Ты строгий, стильный AI-Дворецкий. Твоя задача: взять скомканный поток мыслей пользователя и превратить его в идеальное расписание.
-Также, если у пользователя есть свободное время, ты должен порекомендовать РОВНО ОДНУ вещь для отдыха (фильм, игра, музыкальный альбом, книга), идеально подходящую под настроение пользователя.
+    updateConfig() {
+        this.primaryModel = Storage.getPrimaryModel();
+        this.fallbackModel = Storage.getFallbackModel();
+        this.fallbackEnabled = Storage.getFallbackEnabled();
+        this.temperature = Storage.getTemperature();
+    }
 
+    buildSystemContext(knownFacts) {
+        let memoryPrompt = '';
+        if (knownFacts && knownFacts.length > 0) {
+            memoryPrompt = `\nДолговременная память о пользователе (учитывай эти факты при распределении нагрузки, времени и подборе отдыха):\n- ${knownFacts.join('\n- ')}\n`;
+        }
+        return memoryPrompt;
+    }
+
+    async callGeminiModel(modelName, prompt, apiKey) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 35000);
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: this.temperature }
+                }),
+                signal: controller.signal
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                const message = errorData?.error?.message || response.statusText;
+                const err = new Error(`API Error [${response.status}]: ${message}`);
+                err.status = response.status;
+                throw err;
+            }
+
+            const data = await response.json();
+            let textOutput = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const start = textOutput.indexOf('{');
+            const end = textOutput.lastIndexOf('}');
+            if (start !== -1 && end > start) {
+                textOutput = textOutput.slice(start, end + 1);
+            }
+
+            return JSON.parse(textOutput);
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+
+    async executeWithSmartFallback(prompt, apiKey) {
+        this.updateConfig();
+        let lastError = null;
+
+        // Try primary model first
+        try {
+            const parsed = await this.callGeminiModel(this.primaryModel, prompt, apiKey);
+            return {
+                data: parsed,
+                usedFallback: false,
+                modelUsed: this.primaryModel
+            };
+        } catch (error) {
+            console.warn(`Primary model (${this.primaryModel}) error:`, error);
+            lastError = error;
+
+            // If rate limited / 429 / quota / 503 and fallback is allowed:
+            const isRateLimitOrUnavailable = error.status === 429 || error.status === 503 || String(error.message).includes('429') || String(error.message).includes('RESOURCE_EXHAUSTED');
+            
+            if (this.fallbackEnabled && isRateLimitOrUnavailable && this.fallbackModel && this.fallbackModel !== this.primaryModel) {
+                console.log(`Switching to Smart Fallback model: ${this.fallbackModel}...`);
+                try {
+                    const fallbackParsed = await this.callGeminiModel(this.fallbackModel, prompt, apiKey);
+                    return {
+                        data: fallbackParsed,
+                        usedFallback: true,
+                        modelUsed: this.fallbackModel
+                    };
+                } catch (fallbackError) {
+                    console.error(`Fallback model (${this.fallbackModel}) also failed:`, fallbackError);
+                    lastError = fallbackError;
+                }
+            }
+        }
+
+        throw lastError || new Error('Не удалось получить ответ от моделей Gemini.');
+    }
+
+    async generateScheduleAndRec(userInput, apiKey) {
+        const knownFacts = Storage.getMemoryFacts();
+        const memoryContext = this.buildSystemContext(knownFacts);
+
+        const prompt = `Ты строгий, стильный и внимательный AI-Дворецкий. 
+Твоя задача: взять скомканный поток мыслей пользователя и превратить его в идеальное расписание.
+Также, если у пользователя есть свободное время, ты должен порекомендовать РОВНО ОДНУ вещь для отдыха (фильм, игра, музыкальный альбом, книга), идеально подходящую под настроение и вкусы пользователя.
+Кроме того, если в сообщении пользователя есть новые факты о его привычках, графике, спорте, вкусах или биоритмах, выдели их в массив "newFacts" (краткие утверждения в 3-6 слов). Если ничего нового нет, верни пустой массив.
+${memoryContext}
 Ввод пользователя: "${userInput}"
 
 Ответь СТРОГО в формате JSON без маркдаун-разметки (\`\`\`json) и без лишнего текста. Структура:
 {
   "schedule": [
-    {"time": "HH:MM - HH:MM", "task": "Название задачи"}
+    {"time": "HH:MM - HH:MM", "task": "Название задачи", "done": false}
   ],
   "recommendation": {
     "type": "Фильм / Игра / Альбом / Книга",
     "title": "Название",
     "description": "Краткое обоснование в 1-2 предложения, почему это идеально подойдет сейчас."
-  }
+  },
+  "newFacts": ["Факт о пользователе 1"]
 }`;
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.modelName}:generateContent?key=${apiKey}`;
-        
-        const maxAttempts = 3;
-        let lastError = null;
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 30000);
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: { temperature: this.temperature }
-                    }),
-                    signal: controller.signal
-                });
+        return await this.executeWithSmartFallback(prompt, apiKey);
+    }
 
-                if (!response.ok) {
-                    throw new Error(`API Error: ${response.status} ${response.statusText}`);
-                }
+    async refineSchedule(currentScheduleData, userInstruction, apiKey) {
+        const knownFacts = Storage.getMemoryFacts();
+        const memoryContext = this.buildSystemContext(knownFacts);
 
-                const data = await response.json();
-                let textOutput = data.candidates[0].content.parts[0].text;
-                const start = textOutput.indexOf('{');
-                const end = textOutput.lastIndexOf('}');
-                if (start !== -1 && end > start) {
-                    textOutput = textOutput.slice(start, end + 1);
-                }
+        const prompt = `Ты строгий, стильный и внимательный AI-Дворецкий.
+У пользователя уже есть расписание:
+${JSON.stringify(currentScheduleData.schedule, null, 2)}
 
-                try {
-                    return JSON.parse(textOutput);
-                } catch (parseError) {
-                    lastError = new Error('Не удалось разобрать ответ модели. Попробуйте ещё раз.');
-                }
-            } catch (fetchError) {
-                lastError = fetchError;
-            } finally {
-                clearTimeout(timeout);
-            }
-        }
-        throw lastError;
+Текущая рекомендация на вечер:
+${JSON.stringify(currentScheduleData.recommendation, null, 2)}
+${memoryContext}
+Пользователь просит внести корректировку: "${userInstruction}"
+
+Твоя задача:
+1. Аккуратно скорректировать расписание согласно инструкции (сдвинуть время, заменить задачу, добавить/удалить).
+2. ВАЖНО: Сохрани статус "done": true для задач, которые пользователь уже выполнил, если инструкция явно не отменяет их.
+3. Если пользователь попросил сменить рекомендацию или изменился вечер, обнови рекомендацию.
+4. Если из инструкции можно извлечь новый факт о пользователе (например, "не люблю комедии", "по вторникам бассейн"), добавь его в "newFacts".
+
+Ответь СТРОГО в формате JSON без маркдаун-разметки (\`\`\`json) и без лишнего текста:
+{
+  "schedule": [
+    {"time": "HH:MM - HH:MM", "task": "Название задачи", "done": false}
+  ],
+  "recommendation": {
+    "type": "Фильм / Игра / Альбом / Книга",
+    "title": "Название",
+    "description": "Краткое обоснование."
+  },
+  "newFacts": []
+}`;
+
+        return await this.executeWithSmartFallback(prompt, apiKey);
     }
 }
 
@@ -333,11 +603,22 @@ class UI {
             recType: document.getElementById('recType'),
             recTitle: document.getElementById('recTitle'),
             recDescription: document.getElementById('recDescription'),
+            modelBadge: document.getElementById('modelBadge'),
+            followUpInput: document.getElementById('followUpInput'),
+            followUpMicBtn: document.getElementById('followUpMicBtn'),
+            followUpSendBtn: document.getElementById('followUpSendBtn'),
             apiKeyModal: document.getElementById('apiKeyModal'),
             apiKeyInput: document.getElementById('apiKeyInput'),
-            modelSelect: document.getElementById('modelSelect'),
+            primaryModelSelect: document.getElementById('primaryModelSelect'),
+            fallbackModelSelect: document.getElementById('fallbackModelSelect'),
+            fallbackCheckbox: document.getElementById('fallbackCheckbox'),
+            soundCheckbox: document.getElementById('soundCheckbox'),
             temperatureInput: document.getElementById('temperatureInput'),
             temperatureValue: document.getElementById('temperatureValue'),
+            memoryTagsContainer: document.getElementById('memoryTagsContainer'),
+            newFactInput: document.getElementById('newFactInput'),
+            addFactBtn: document.getElementById('addFactBtn'),
+            clearMemoryBtn: document.getElementById('clearMemoryBtn'),
             saveApiBtn: document.getElementById('saveApiBtn'),
             closeApiBtn: document.getElementById('closeApiBtn'),
             inputSection: document.querySelector('.input-section'),
@@ -357,6 +638,7 @@ class UI {
         this.onPlanEdit = null;
         this.onPlanToggle = null;
         this.onRepeatToggle = null;
+        this.onDeleteMemoryFact = null;
     }
 
     bindEvents(handlers) {
@@ -374,6 +656,20 @@ class UI {
         this.elements.closeWeekBtn.addEventListener('click', handlers.onCloseWeekModal);
         this.elements.weekPrevBtn.addEventListener('click', handlers.onWeekPrev);
         this.elements.weekNextBtn.addEventListener('click', handlers.onWeekNext);
+
+        // Follow-up events
+        this.elements.followUpSendBtn.addEventListener('click', handlers.onFollowUpSend);
+        this.elements.followUpMicBtn.addEventListener('click', handlers.onFollowUpMic);
+        this.elements.followUpInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handlers.onFollowUpSend();
+        });
+
+        // Memory events
+        this.elements.addFactBtn.addEventListener('click', handlers.onAddFact);
+        this.elements.newFactInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handlers.onAddFact();
+        });
+        this.elements.clearMemoryBtn.addEventListener('click', handlers.onClearMemory);
     }
 
     updateAuthButton(isLoggedIn) {
@@ -386,28 +682,58 @@ class UI {
         }
     }
 
-    showModal(currentKey, currentModel, currentTemperature) {
+    showModal(currentKey, primaryModel, fallbackModel, fallbackEnabled, soundEnabled, currentTemperature, memoryFacts) {
         this.elements.apiKeyInput.value = currentKey;
-        this.elements.modelSelect.value = currentModel;
+        this.elements.primaryModelSelect.value = primaryModel;
+        this.elements.fallbackModelSelect.value = fallbackModel;
+        this.elements.fallbackCheckbox.checked = fallbackEnabled;
+        this.elements.soundCheckbox.checked = soundEnabled;
         this.elements.temperatureInput.value = currentTemperature;
         this.elements.temperatureValue.textContent = currentTemperature;
+        this.renderMemoryTags(memoryFacts);
         this.elements.apiKeyModal.classList.remove('hidden');
+    }
+
+    renderMemoryTags(facts) {
+        this.elements.memoryTagsContainer.innerHTML = '';
+        if (!facts || facts.length === 0) {
+            this.elements.memoryTagsContainer.innerHTML = '<span class="memory-empty">Дворецкий пока не сохранил фактов о вас. Общайтесь с ним, и он запомнит ваши привычки!</span>';
+            return;
+        }
+
+        facts.forEach((fact, index) => {
+            const tag = document.createElement('span');
+            tag.className = 'memory-tag';
+            tag.textContent = fact;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'memory-tag-remove';
+            removeBtn.innerHTML = '&times;';
+            removeBtn.title = 'Удалить факт';
+            removeBtn.addEventListener('click', () => {
+                if (this.onDeleteMemoryFact) {
+                    this.onDeleteMemoryFact(index);
+                }
+            });
+
+            tag.appendChild(removeBtn);
+            this.elements.memoryTagsContainer.appendChild(tag);
+        });
     }
 
     hideModal() {
         this.elements.apiKeyModal.classList.add('hidden');
     }
 
-    getApiKeyInput() {
-        return this.elements.apiKeyInput.value.trim();
-    }
-
-    getModelInput() {
-        return this.elements.modelSelect.value;
-    }
-
-    getTemperatureInput() {
-        return parseFloat(this.elements.temperatureInput.value);
+    getSettingsValues() {
+        return {
+            apiKey: this.elements.apiKeyInput.value.trim(),
+            primaryModel: this.elements.primaryModelSelect.value,
+            fallbackModel: this.elements.fallbackModelSelect.value,
+            fallbackEnabled: this.elements.fallbackCheckbox.checked,
+            soundEnabled: this.elements.soundCheckbox.checked,
+            temperature: parseFloat(this.elements.temperatureInput.value)
+        };
     }
 
     getBraindumpText() {
@@ -419,11 +745,24 @@ class UI {
         this.elements.braindump.value = current ? current + ' ' + text : text;
     }
 
-    setMicActive(isActive) {
+    getFollowUpText() {
+        return this.elements.followUpInput.value.trim();
+    }
+
+    setFollowUpText(text) {
+        this.elements.followUpInput.value = text;
+    }
+
+    clearFollowUpInput() {
+        this.elements.followUpInput.value = '';
+    }
+
+    setMicActive(isActive, buttonId = 'micBtn') {
+        const btn = buttonId === 'followUpMicBtn' ? this.elements.followUpMicBtn : this.elements.micBtn;
         if (isActive) {
-            this.elements.micBtn.classList.add('active');
+            btn.classList.add('active');
         } else {
-            this.elements.micBtn.classList.remove('active');
+            btn.classList.remove('active');
         }
     }
 
@@ -437,23 +776,40 @@ class UI {
         this.elements.braindump.focus();
     }
 
-    showLoader() {
-        this.elements.inputSection.style.opacity = '0';
-        setTimeout(() => {
-            this.elements.inputSection.style.display = 'none';
-            this.elements.resultsSection.classList.remove('hidden');
+    showLoader(message = 'Анализирую и планирую...') {
+        const p = this.elements.loader.querySelector('p');
+        if (p) p.textContent = message;
+        
+        if (this.elements.inputSection.style.display !== 'none') {
+            this.elements.inputSection.style.opacity = '0';
+            setTimeout(() => {
+                this.elements.inputSection.style.display = 'none';
+                this.elements.resultsSection.classList.remove('hidden');
+                this.elements.loader.classList.remove('hidden');
+                this.elements.outputContent.classList.add('hidden');
+                this.elements.loader.setAttribute('aria-hidden', 'false');
+            }, 300);
+        } else {
             this.elements.loader.classList.remove('hidden');
             this.elements.outputContent.classList.add('hidden');
-            this.elements.loader.setAttribute('aria-hidden', 'false');
-        }, 300);
+        }
     }
 
-    renderResults(data, planId, repeat, repeatKey) {
+    renderResults(data, planId, repeat, repeatKey, usedFallback = false, modelUsed = '') {
         this.currentPlanId = planId;
         this.currentData = data;
         this.elements.repeatToggle.classList.toggle('active', !!repeat);
         this.elements.repeatToggle.dataset.repeatKey = repeatKey || '';
         
+        // Model badge
+        if (modelUsed) {
+            this.elements.modelBadge.textContent = usedFallback ? `⚡ Fallback: ${modelUsed}` : modelUsed;
+            this.elements.modelBadge.classList.toggle('fallback', !!usedFallback);
+            this.elements.modelBadge.classList.remove('hidden');
+        } else {
+            this.elements.modelBadge.classList.add('hidden');
+        }
+
         this.elements.scheduleList.innerHTML = '';
         data.schedule.forEach((item, index) => {
             const li = document.createElement('li');
@@ -465,6 +821,7 @@ class UI {
             check.setAttribute('aria-label', 'Отметить задачу выполненной');
             check.addEventListener('change', () => {
                 this.currentData.schedule[index].done = check.checked;
+                SoundService.playPop();
                 if (this.onPlanToggle) this.onPlanToggle(this.currentPlanId, index, check.checked);
                 this.updateProgress();
             });
@@ -494,7 +851,7 @@ class UI {
             this.elements.scheduleList.appendChild(li);
         });
 
-        this.updateProgress();
+        this.updateProgress(false);
 
         this.elements.recType.textContent = data.recommendation.type;
         this.elements.recTitle.textContent = data.recommendation.title;
@@ -509,12 +866,21 @@ class UI {
         alert('Ошибка: ' + message);
     }
 
-    updateProgress() {
+    updateProgress(triggerSound = true) {
         const total = this.currentData.schedule.length;
         const done = this.currentData.schedule.filter(i => i.done).length;
         this.elements.dayProgress.classList.toggle('hidden', total === 0);
-        this.elements.dayProgressFill.style.width = total ? (done / total * 100) + '%' : '0%';
+        const percent = total ? (done / total * 100) : 0;
+        this.elements.dayProgressFill.style.width = percent + '%';
         this.elements.dayProgressText.textContent = done + '/' + total;
+
+        const progressBar = this.elements.dayProgress.querySelector('.day-progress-bar');
+        if (total > 0 && done === total) {
+            progressBar.classList.add('complete');
+            if (triggerSound) SoundService.playSuccess();
+        } else {
+            progressBar.classList.remove('complete');
+        }
     }
 
     showHistoryModal(plans, onPlanClick) {
@@ -628,11 +994,9 @@ class App {
         this.api = new API();
         this.ui = new UI();
         this.apiKey = Storage.getApiKey();
+        this.plans = [];
         
-        this.speech = new SpeechService(
-            (text) => this.ui.appendBraindumpText(text),
-            () => this.ui.setMicActive(false)
-        );
+        this.speech = new SpeechService();
 
         this.init();
     }
@@ -641,6 +1005,7 @@ class App {
         this.ui.onPlanEdit = (planId, newData) => this.handlePlanEdit(planId, newData);
         this.ui.onPlanToggle = (planId, index, done) => this.handlePlanToggle(planId, index, done);
         this.ui.onRepeatToggle = (enabled) => this.handleRepeatToggle(enabled);
+        this.ui.onDeleteMemoryFact = (index) => this.handleDeleteMemoryFact(index);
 
         this.ui.elements.repeatToggle.addEventListener('click', () => {
             const enabled = !this.ui.elements.repeatToggle.classList.contains('active');
@@ -653,15 +1018,19 @@ class App {
 
         this.ui.bindEvents({
             onAuthClick: () => this.handleAuth(),
-            onSettingsClick: () => this.ui.showModal(this.apiKey, Storage.getModel(), Storage.getTemperature()),
+            onSettingsClick: () => this.openSettings(),
             onCloseModal: () => this.ui.hideModal(),
-            onSaveApiKey: () => this.handleSaveApiKey(),
+            onSaveApiKey: () => this.handleSaveSettings(),
             onOrganize: () => this.handleOrganize(),
             onReset: () => this.ui.resetView(),
             onHistoryClick: () => this.handleHistoryClick(),
             onCloseHistoryModal: () => { this.historyModalOpen = false; this.ui.hideHistoryModal(); },
             onClearHistory: () => this.handleClearHistory(),
             onMicClick: () => this.handleMic(),
+            onFollowUpMic: () => this.handleFollowUpMic(),
+            onFollowUpSend: () => this.handleFollowUpSend(),
+            onAddFact: () => this.handleAddFact(),
+            onClearMemory: () => this.handleClearMemory(),
             onWeekClick: () => this.handleWeekClick(),
             onCloseWeekModal: () => { this.weekModalOpen = false; this.ui.hideWeekModal(); },
             onWeekPrev: () => { this.weekOffset -= 1; this.renderWeek(); },
@@ -669,24 +1038,57 @@ class App {
         });
 
         if (!isFirebaseMocked && auth) {
-            onAuthStateChanged(auth, (user) => {
+            onAuthStateChanged(auth, async (user) => {
                 this.ui.updateAuthButton(!!user);
                 if (this.unsubscribe) { this.unsubscribe(); this.unsubscribe = null; }
                 this.plans = [];
                 if (user) {
                     this.unsubscribe = Storage.subscribePlans((plans) => this.handlePlansUpdate(plans));
+                    await Storage.loadMemoryFromCloud();
                 }
             });
         }
 
         this.initPush();
-        
         NotificationService.requestPermission();
     }
 
-        initPush() {
+    openSettings() {
+        this.ui.showModal(
+            this.apiKey,
+            Storage.getPrimaryModel(),
+            Storage.getFallbackModel(),
+            Storage.getFallbackEnabled(),
+            Storage.getSoundEnabled(),
+            Storage.getTemperature(),
+            Storage.getMemoryFacts()
+        );
+    }
+
+    handleDeleteMemoryFact(index) {
+        const updated = Storage.removeMemoryFact(index);
+        this.ui.renderMemoryTags(updated);
+    }
+
+    handleAddFact() {
+        const input = this.ui.elements.newFactInput;
+        const text = input.value.trim();
+        if (text) {
+            const updated = Storage.addMemoryFacts([text]);
+            this.ui.renderMemoryTags(updated);
+            input.value = '';
+        }
+    }
+
+    handleClearMemory() {
+        if (confirm('Очистить все воспоминания Дворецкого?')) {
+            Storage.clearMemoryFacts();
+            this.ui.renderMemoryTags([]);
+        }
+    }
+
+    initPush() {
         if (isFirebaseMocked || !messaging || !VAPID_KEY || VAPID_KEY === 'YOUR_VAPID_KEY') {
-            console.warn('Push-уведомления отключены: не задан VAPID-ключ.');
             return;
         }
         try {
@@ -751,8 +1153,19 @@ class App {
     }
 
     handleMic() {
-        this.ui.setMicActive(true);
-        this.speech.start();
+        this.ui.setMicActive(true, 'micBtn');
+        this.speech.start(
+            (text) => this.ui.appendBraindumpText(text),
+            () => this.ui.setMicActive(false, 'micBtn')
+        );
+    }
+
+    handleFollowUpMic() {
+        this.ui.setMicActive(true, 'followUpMicBtn');
+        this.speech.start(
+            (text) => this.ui.setFollowUpText(text),
+            () => this.ui.setMicActive(false, 'followUpMicBtn')
+        );
     }
 
     async handleHistoryClick() {
@@ -810,19 +1223,17 @@ class App {
         }, 300);
     }
 
-    handleSaveApiKey() {
-        const newKey = this.ui.getApiKeyInput();
-        this.apiKey = newKey;
-        Storage.saveApiKey(newKey);
+    handleSaveSettings() {
+        const settings = this.ui.getSettingsValues();
+        this.apiKey = settings.apiKey;
+        Storage.saveApiKey(settings.apiKey);
+        Storage.savePrimaryModel(settings.primaryModel);
+        Storage.saveFallbackModel(settings.fallbackModel);
+        Storage.saveFallbackEnabled(settings.fallbackEnabled);
+        Storage.saveSoundEnabled(settings.soundEnabled);
+        Storage.saveTemperature(settings.temperature);
 
-        const newModel = this.ui.getModelInput();
-        Storage.saveModel(newModel);
-        this.api.modelName = newModel;
-
-        const newTemperature = this.ui.getTemperatureInput();
-        Storage.saveTemperature(newTemperature);
-        this.api.temperature = newTemperature;
-
+        this.api.updateConfig();
         this.ui.hideModal();
     }
 
@@ -881,14 +1292,20 @@ class App {
         }
         
         if (!this.apiKey) {
-            this.ui.showModal(this.apiKey, Storage.getModel(), Storage.getTemperature());
+            this.openSettings();
             return;
         }
 
-        this.ui.showLoader();
+        this.ui.showLoader('Анализирую хаос и создаю расписание...');
 
         try {
-            const responseData = await this.api.generateScheduleAndRec(text, this.apiKey);
+            const result = await this.api.generateScheduleAndRec(text, this.apiKey);
+            const responseData = result.data;
+
+            // Auto-learn facts
+            if (responseData.newFacts && responseData.newFacts.length > 0) {
+                Storage.addMemoryFacts(responseData.newFacts);
+            }
             
             const savedPlan = await Storage.savePlan({
                 timestamp: Date.now(),
@@ -896,13 +1313,53 @@ class App {
                 data: responseData
             });
 
-            this.ui.renderResults(responseData, savedPlan.id, false, null);
+            this.ui.renderResults(responseData, savedPlan.id, false, null, result.usedFallback, result.modelUsed);
             NotificationService.scheduleNotifications(responseData.schedule);
             
         } catch (error) {
             console.error(error);
             this.ui.showError(error.message);
             this.ui.resetView();
+        }
+    }
+
+    async handleFollowUpSend() {
+        const instruction = this.ui.getFollowUpText();
+        if (!instruction) return;
+
+        if (!this.apiKey) {
+            this.openSettings();
+            return;
+        }
+
+        const planId = this.ui.currentPlanId;
+        const currentData = this.ui.currentData;
+
+        if (!planId || !currentData) return;
+
+        this.ui.showLoader('Дворецкий пересчитывает план...');
+        this.ui.clearFollowUpInput();
+
+        try {
+            const result = await this.api.refineSchedule(currentData, instruction, this.apiKey);
+            const updatedData = result.data;
+
+            // Auto-learn facts
+            if (updatedData.newFacts && updatedData.newFacts.length > 0) {
+                Storage.addMemoryFacts(updatedData.newFacts);
+            }
+
+            await Storage.updatePlan(planId, { data: updatedData });
+
+            this.ui.renderResults(updatedData, planId, this.ui.elements.repeatToggle.classList.contains('active'), this.ui.elements.repeatToggle.dataset.repeatKey, result.usedFallback, result.modelUsed);
+            NotificationService.scheduleNotifications(updatedData.schedule);
+
+        } catch (error) {
+            console.error(error);
+            this.ui.showError(error.message);
+            if (this.ui.currentData) {
+                this.ui.renderResults(this.ui.currentData, planId, false, null);
+            }
         }
     }
 }

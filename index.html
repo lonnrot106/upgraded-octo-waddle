@@ -77,25 +77,88 @@
                         </div>
                     </div>
                 </div>
-                <button id="resetBtn" class="secondary-btn">Новый план</button>
+                <div class="followup-container">
+                    <div class="followup-header">
+                        <span class="followup-title">💬 Доработать план с Дворецким</span>
+                        <span id="modelBadge" class="model-badge hidden">3.5 Flash Lite</span>
+                    </div>
+                    <div class="followup-input-wrapper">
+                        <input type="text" id="followUpInput" placeholder="Например: сдвинь тренировку на 19:00 или посоветуй книгу вместо фильма...">
+                        <button id="followUpMicBtn" class="icon-btn followup-mic-btn" title="Голосовая правка" aria-label="Голосовая правка">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" x2="12" y1="19" y2="22"></line></svg>
+                        </button>
+                        <button id="followUpSendBtn" class="primary-btn followup-send-btn" title="Отправить правку" aria-label="Отправить правку">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="results-actions">
+                    <button id="resetBtn" class="secondary-btn">Новый план</button>
+                </div>
             </div>
         </section>
     </main>
 
-    <!-- Modal for API Key -->
+    <!-- Modal for Settings -->
     <div id="apiKeyModal" class="modal hidden" role="dialog" aria-labelledby="modalTitle" aria-modal="true">
-        <div class="modal-content">
+        <div class="modal-content settings-modal-content">
             <h2 id="modalTitle">Настройки</h2>
-            <p>Для работы ИИ-дворецкого нужен ключ от Google Gemini. Он сохраняется только в вашем браузере.</p>
-            <label for="apiKeyInput" class="visually-hidden">Ввод API ключа</label>
-            <input type="password" id="apiKeyInput" placeholder="AIzaSy...">
-            <label for="modelSelect" class="settings-label">Модель Gemini</label>
-            <select id="modelSelect">
-                <option value="gemini-2.5-flash">2.5 Flash (быстрая)</option>
-                <option value="gemini-2.5-pro">2.5 Pro (точнее)</option>
-            </select>
-            <label for="temperatureInput" class="settings-label">Креативность: <span id="temperatureValue">0.7</span></label>
-            <input type="range" id="temperatureInput" min="0" max="1" step="0.1" value="0.7">
+            <p class="settings-desc">Для работы ИИ-дворецкого нужен ключ Google Gemini. Он сохраняется только в вашем браузере.</p>
+            
+            <div class="settings-group">
+                <label for="apiKeyInput" class="settings-label">Gemini API Key</label>
+                <input type="password" id="apiKeyInput" placeholder="AIzaSy...">
+            </div>
+
+            <div class="settings-grid">
+                <div class="settings-group">
+                    <label for="primaryModelSelect" class="settings-label">Основная модель</label>
+                    <select id="primaryModelSelect">
+                        <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (быстрая)</option>
+                        <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
+                    </select>
+                </div>
+                <div class="settings-group">
+                    <label for="fallbackModelSelect" class="settings-label">Резервная (Fallback)</label>
+                    <select id="fallbackModelSelect">
+                        <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (резерв)</option>
+                        <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="settings-options">
+                <label class="toggle-label">
+                    <input type="checkbox" id="fallbackCheckbox" checked>
+                    <span>Автоматический Fallback при 429 / лимитах</span>
+                </label>
+                <label class="toggle-label">
+                    <input type="checkbox" id="soundCheckbox" checked>
+                    <span>Тактильные звуковые эффекты</span>
+                </label>
+            </div>
+
+            <div class="settings-group">
+                <label for="temperatureInput" class="settings-label">Креативность: <span id="temperatureValue">0.7</span></label>
+                <input type="range" id="temperatureInput" min="0" max="1" step="0.1" value="0.7">
+            </div>
+
+            <div class="memory-section">
+                <div class="memory-header">
+                    <label class="settings-label">🧠 Память Дворецкого</label>
+                    <button id="clearMemoryBtn" class="clear-memory-btn" title="Очистить все заметки">Очистить память</button>
+                </div>
+                <p class="memory-subtext">Факты и привычки, которые Дворецкий запоминает автоматически во время диалогов:</p>
+                <div id="memoryTagsContainer" class="memory-tags-container">
+                    <!-- Dynamic memory tags inserted here -->
+                </div>
+                <div class="add-memory-row">
+                    <input type="text" id="newFactInput" placeholder="Добавить факт вручную (например: 'Люблю киберпанк')">
+                    <button id="addFactBtn" class="secondary-btn add-fact-btn">+ Добавить</button>
+                </div>
+            </div>
+
             <div class="modal-actions">
                 <button id="saveApiBtn" class="primary-btn">Сохранить</button>
                 <button id="closeApiBtn" class="secondary-btn">Отмена</button>
