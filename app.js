@@ -119,36 +119,44 @@ class SoundService {
 // ============================================================================
 class Storage {
     static getApiKey() {
-        return localStorage.getItem('gemini_api_key') || '';
+        return localStorage.getItem('gorouter_api_key') || localStorage.getItem('ai_api_key') || localStorage.getItem('gemini_api_key') || '';
     }
 
     static saveApiKey(key) {
-        localStorage.setItem('gemini_api_key', key);
+        localStorage.setItem('gorouter_api_key', key);
+    }
+
+    static getBaseUrl() {
+        return localStorage.getItem('ai_base_url') || 'https://gorouter.app/v1';
+    }
+
+    static saveBaseUrl(url) {
+        localStorage.setItem('ai_base_url', url);
     }
 
     static getPrimaryModel() {
-        return localStorage.getItem('gemini_primary_model') || 'gemini-3.5-flash-lite';
+        return localStorage.getItem('ai_primary_model') || 'claude-opus-5-thinking';
     }
 
     static savePrimaryModel(model) {
-        localStorage.setItem('gemini_primary_model', model);
+        localStorage.setItem('ai_primary_model', model);
     }
 
     static getFallbackModel() {
-        return localStorage.getItem('gemini_fallback_model') || 'gemini-3.1-flash-lite';
+        return localStorage.getItem('ai_fallback_model') || 'claude-opus-4-8';
     }
 
     static saveFallbackModel(model) {
-        localStorage.setItem('gemini_fallback_model', model);
+        localStorage.setItem('ai_fallback_model', model);
     }
 
     static getFallbackEnabled() {
-        const val = localStorage.getItem('gemini_fallback_enabled');
+        const val = localStorage.getItem('ai_fallback_enabled') ?? localStorage.getItem('gemini_fallback_enabled');
         return val === null ? true : val === 'true';
     }
 
     static saveFallbackEnabled(enabled) {
-        localStorage.setItem('gemini_fallback_enabled', String(enabled));
+        localStorage.setItem('ai_fallback_enabled', String(enabled));
     }
 
     static getSoundEnabled() {
@@ -161,12 +169,12 @@ class Storage {
     }
 
     static getTemperature() {
-        const t = parseFloat(localStorage.getItem('gemini_temperature'));
+        const t = parseFloat(localStorage.getItem('ai_temperature') || localStorage.getItem('gemini_temperature'));
         return isNaN(t) ? 0.7 : t;
     }
 
     static saveTemperature(temperature) {
-        localStorage.setItem('gemini_temperature', temperature);
+        localStorage.setItem('ai_temperature', temperature);
     }
 
     // Memory Management
@@ -416,17 +424,16 @@ class SpeechService {
 }
 
 // ============================================================================
-// API Module with Fallback & Memory
+// API Module with GoRouter (OpenAI-compatible) & Fallback & Memory
 // ============================================================================
 class API {
     constructor() {
-        this.primaryModel = Storage.getPrimaryModel();
-        this.fallbackModel = Storage.getFallbackModel();
-        this.fallbackEnabled = Storage.getFallbackEnabled();
-        this.temperature = Storage.getTemperature();
+        this.updateConfig();
     }
 
     updateConfig() {
+        const base = Storage.getBaseUrl() || 'https://gorouter.app/v1';
+        this.baseUrl = base.replace(/\/+$/, '');
         this.primaryModel = Storage.getPrimaryModel();
         this.fallbackModel = Storage.getFallbackModel();
         this.fallbackEnabled = Storage.getFallbackEnabled();
@@ -441,51 +448,72 @@ class API {
         return memoryPrompt;
     }
 
-    async callGeminiModel(modelName, prompt, apiKey) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+    cleanAndParseJson(textOutput) {
+        if (!textOutput || typeof textOutput !== 'string') {
+            throw new Error('Пустой ответ от нейросети');
+        }
+
+        // Strip <think>...</think> tags if reasoning/thinking model used
+        let cleaned = textOutput.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+        // Strip markdown code fences if wrapped
+        cleaned = cleaned.replace(/```json\s*/gi, '').replace(/```\s*$/gi, '').trim();
+
+        const start = cleaned.indexOf('{');
+        const end = cleaned.lastIndexOf('}');
+        if (start !== -1 && end > start) {
+            cleaned = cleaned.slice(start, end + 1);
+        }
+
+        return JSON.parse(cleaned);
+    }
+
+    async callChatModel(modelName, systemPrompt, userPrompt, apiKey) {
+        const url = `${this.baseUrl}/chat/completions`;
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 35000);
+        const timeout = setTimeout(() => controller.abort(), 60000);
 
         try {
             const response = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
                 body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: this.temperature }
+                    model: modelName,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userPrompt }
+                    ],
+                    temperature: this.temperature
                 }),
                 signal: controller.signal
             });
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                const message = errorData?.error?.message || response.statusText;
+                const message = errorData?.error?.message || errorData?.message || response.statusText;
                 const err = new Error(`API Error [${response.status}]: ${message}`);
                 err.status = response.status;
                 throw err;
             }
 
             const data = await response.json();
-            let textOutput = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const start = textOutput.indexOf('{');
-            const end = textOutput.lastIndexOf('}');
-            if (start !== -1 && end > start) {
-                textOutput = textOutput.slice(start, end + 1);
-            }
-
-            return JSON.parse(textOutput);
+            const textOutput = data.choices?.[0]?.message?.content || '';
+            return this.cleanAndParseJson(textOutput);
         } finally {
             clearTimeout(timeout);
         }
     }
 
-    async executeWithSmartFallback(prompt, apiKey) {
+    async executeWithSmartFallback(systemPrompt, userPrompt, apiKey) {
         this.updateConfig();
         let lastError = null;
 
         // Try primary model first
         try {
-            const parsed = await this.callGeminiModel(this.primaryModel, prompt, apiKey);
+            const parsed = await this.callChatModel(this.primaryModel, systemPrompt, userPrompt, apiKey);
             return {
                 data: parsed,
                 usedFallback: false,
@@ -496,12 +524,12 @@ class API {
             lastError = error;
 
             // If rate limited / 429 / quota / 503 and fallback is allowed:
-            const isRateLimitOrUnavailable = error.status === 429 || error.status === 503 || String(error.message).includes('429') || String(error.message).includes('RESOURCE_EXHAUSTED');
+            const isRateLimitOrUnavailable = error.status === 429 || error.status === 503 || error.status === 500 || String(error.message).includes('429') || String(error.message).includes('quota');
             
-            if (this.fallbackEnabled && isRateLimitOrUnavailable && this.fallbackModel && this.fallbackModel !== this.primaryModel) {
+            if (this.fallbackEnabled && this.fallbackModel && this.fallbackModel !== this.primaryModel) {
                 console.log(`Switching to Smart Fallback model: ${this.fallbackModel}...`);
                 try {
-                    const fallbackParsed = await this.callGeminiModel(this.fallbackModel, prompt, apiKey);
+                    const fallbackParsed = await this.callChatModel(this.fallbackModel, systemPrompt, userPrompt, apiKey);
                     return {
                         data: fallbackParsed,
                         usedFallback: true,
@@ -514,21 +542,19 @@ class API {
             }
         }
 
-        throw lastError || new Error('Не удалось получить ответ от моделей Gemini.');
+        throw lastError || new Error('Не удалось получить ответ от моделей.');
     }
 
     async generateScheduleAndRec(userInput, apiKey) {
         const knownFacts = Storage.getMemoryFacts();
         const memoryContext = this.buildSystemContext(knownFacts);
 
-        const prompt = `Ты строгий, стильный и внимательный AI-Дворецкий. 
+        const systemPrompt = `Ты строгий, стильный и внимательный AI-Дворецкий. 
 Твоя задача: взять скомканный поток мыслей пользователя и превратить его в идеальное расписание.
 Также, если у пользователя есть свободное время, ты должен порекомендовать РОВНО ОДНУ вещь для отдыха (фильм, игра, музыкальный альбом, книга), идеально подходящую под настроение и вкусы пользователя.
 Кроме того, если в сообщении пользователя есть новые факты о его привычках, графике, спорте, вкусах или биоритмах, выдели их в массив "newFacts" (краткие утверждения в 3-6 слов). Если ничего нового нет, верни пустой массив.
 ${memoryContext}
-Ввод пользователя: "${userInput}"
-
-Ответь СТРОГО в формате JSON без маркдаун-разметки (\`\`\`json) и без лишнего текста. Структура:
+Ответь СТРОГО в формате JSON без какого-либо дополнительного текста вокруг:
 {
   "schedule": [
     {"time": "HH:MM - HH:MM", "task": "Название задачи", "done": false}
@@ -541,29 +567,29 @@ ${memoryContext}
   "newFacts": ["Факт о пользователе 1"]
 }`;
 
-        return await this.executeWithSmartFallback(prompt, apiKey);
+        const userPrompt = `Ввод пользователя: "${userInput}"`;
+
+        return await this.executeWithSmartFallback(systemPrompt, userPrompt, apiKey);
     }
 
     async refineSchedule(currentScheduleData, userInstruction, apiKey) {
         const knownFacts = Storage.getMemoryFacts();
         const memoryContext = this.buildSystemContext(knownFacts);
 
-        const prompt = `Ты строгий, стильный и внимательный AI-Дворецкий.
+        const systemPrompt = `Ты строгий, стильный и внимательный AI-Дворецкий.
 У пользователя уже есть расписание:
 ${JSON.stringify(currentScheduleData.schedule, null, 2)}
 
 Текущая рекомендация на вечер:
 ${JSON.stringify(currentScheduleData.recommendation, null, 2)}
 ${memoryContext}
-Пользователь просит внести корректировку: "${userInstruction}"
-
 Твоя задача:
-1. Аккуратно скорректировать расписание согласно инструкции (сдвинуть время, заменить задачу, добавить/удалить).
+1. Аккуратно скорректировать расписание согласно инструкции пользователя (сдвинуть время, заменить задачу, добавить/удалить).
 2. ВАЖНО: Сохрани статус "done": true для задач, которые пользователь уже выполнил, если инструкция явно не отменяет их.
 3. Если пользователь попросил сменить рекомендацию или изменился вечер, обнови рекомендацию.
 4. Если из инструкции можно извлечь новый факт о пользователе (например, "не люблю комедии", "по вторникам бассейн"), добавь его в "newFacts".
 
-Ответь СТРОГО в формате JSON без маркдаун-разметки (\`\`\`json) и без лишнего текста:
+Ответь СТРОГО в формате JSON без какого-либо дополнительного текста вокруг:
 {
   "schedule": [
     {"time": "HH:MM - HH:MM", "task": "Название задачи", "done": false}
@@ -576,7 +602,9 @@ ${memoryContext}
   "newFacts": []
 }`;
 
-        return await this.executeWithSmartFallback(prompt, apiKey);
+        const userPrompt = `Инструкция по корректировке: "${userInstruction}"`;
+
+        return await this.executeWithSmartFallback(systemPrompt, userPrompt, apiKey);
     }
 }
 
@@ -609,6 +637,7 @@ class UI {
             followUpSendBtn: document.getElementById('followUpSendBtn'),
             apiKeyModal: document.getElementById('apiKeyModal'),
             apiKeyInput: document.getElementById('apiKeyInput'),
+            apiBaseUrlInput: document.getElementById('apiBaseUrlInput'),
             primaryModelSelect: document.getElementById('primaryModelSelect'),
             fallbackModelSelect: document.getElementById('fallbackModelSelect'),
             fallbackCheckbox: document.getElementById('fallbackCheckbox'),
@@ -749,8 +778,11 @@ class UI {
         return modalElement && modalElement.classList.contains('is-open') && !modalElement.classList.contains('closing');
     }
 
-    showModal(currentKey, primaryModel, fallbackModel, fallbackEnabled, soundEnabled, currentTemperature, memoryFacts) {
-        this.elements.apiKeyInput.value = currentKey;
+    showModal(currentKey, baseUrl, primaryModel, fallbackModel, fallbackEnabled, soundEnabled, currentTemperature, memoryFacts) {
+        this.elements.apiKeyInput.value = currentKey || '';
+        if (this.elements.apiBaseUrlInput) {
+            this.elements.apiBaseUrlInput.value = baseUrl || 'https://gorouter.app/v1';
+        }
         this.elements.primaryModelSelect.value = primaryModel;
         this.elements.fallbackModelSelect.value = fallbackModel;
         this.elements.fallbackCheckbox.checked = fallbackEnabled;
@@ -795,6 +827,7 @@ class UI {
     getSettingsValues() {
         return {
             apiKey: this.elements.apiKeyInput.value.trim(),
+            baseUrl: this.elements.apiBaseUrlInput ? this.elements.apiBaseUrlInput.value.trim() : 'https://gorouter.app/v1',
             primaryModel: this.elements.primaryModelSelect.value,
             fallbackModel: this.elements.fallbackModelSelect.value,
             fallbackEnabled: this.elements.fallbackCheckbox.checked,
@@ -1148,6 +1181,7 @@ class App {
     openSettings() {
         this.ui.showModal(
             this.apiKey,
+            Storage.getBaseUrl(),
             Storage.getPrimaryModel(),
             Storage.getFallbackModel(),
             Storage.getFallbackEnabled(),
@@ -1319,6 +1353,7 @@ class App {
         const settings = this.ui.getSettingsValues();
         this.apiKey = settings.apiKey;
         Storage.saveApiKey(settings.apiKey);
+        Storage.saveBaseUrl(settings.baseUrl);
         Storage.savePrimaryModel(settings.primaryModel);
         Storage.saveFallbackModel(settings.fallbackModel);
         Storage.saveFallbackEnabled(settings.fallbackEnabled);
