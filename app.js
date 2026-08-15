@@ -151,30 +151,27 @@ class Storage {
     }
 
     static getFallbackEnabled() {
-        const val = localStorage.getItem('ai_fallback_enabled') ?? localStorage.getItem('gemini_fallback_enabled');
-        return val === null ? true : val === 'true';
+        return true;
     }
 
     static saveFallbackEnabled(enabled) {
-        localStorage.setItem('ai_fallback_enabled', String(enabled));
+        localStorage.setItem('ai_fallback_enabled', 'true');
     }
 
     static getSoundEnabled() {
-        const val = localStorage.getItem('butler_sound_enabled');
-        return val === null ? true : val === 'true';
+        return true;
     }
 
     static saveSoundEnabled(enabled) {
-        localStorage.setItem('butler_sound_enabled', String(enabled));
+        localStorage.setItem('butler_sound_enabled', 'true');
     }
 
     static getTemperature() {
-        const t = parseFloat(localStorage.getItem('ai_temperature') || localStorage.getItem('gemini_temperature'));
-        return isNaN(t) ? 0.7 : t;
+        return 0.7;
     }
 
     static saveTemperature(temperature) {
-        localStorage.setItem('ai_temperature', temperature);
+        localStorage.setItem('ai_temperature', '0.7');
     }
 
     // Memory Management
@@ -200,6 +197,20 @@ class Storage {
             }
         });
         return this.saveMemoryFacts(current);
+    }
+
+    static updateMemoryFact(index, newText) {
+        const current = this.getMemoryFacts();
+        if (index >= 0 && index < current.length) {
+            const trimmed = (newText || '').trim();
+            if (trimmed) {
+                current[index] = trimmed;
+            } else {
+                current.splice(index, 1);
+            }
+            return this.saveMemoryFacts(current);
+        }
+        return current;
     }
 
     static removeMemoryFact(index) {
@@ -653,20 +664,25 @@ class UI {
             followUpMicBtn: document.getElementById('followUpMicBtn'),
             followUpSendBtn: document.getElementById('followUpSendBtn'),
             apiKeyModal: document.getElementById('apiKeyModal'),
+            closeSettingsIconBtn: document.getElementById('closeSettingsIconBtn'),
+            tabBtnApi: document.getElementById('tabBtnApi'),
+            tabBtnMemory: document.getElementById('tabBtnMemory'),
+            tabPanelApi: document.getElementById('tabPanelApi'),
+            tabPanelMemory: document.getElementById('tabPanelMemory'),
+            memoryCountBadge: document.getElementById('memoryCountBadge'),
             apiKeyInput: document.getElementById('apiKeyInput'),
+            toggleApiKeyVisibility: document.getElementById('toggleApiKeyVisibility'),
             apiBaseUrlInput: document.getElementById('apiBaseUrlInput'),
             primaryModelSelect: document.getElementById('primaryModelSelect'),
             fallbackModelSelect: document.getElementById('fallbackModelSelect'),
-            fallbackCheckbox: document.getElementById('fallbackCheckbox'),
-            soundCheckbox: document.getElementById('soundCheckbox'),
-            temperatureInput: document.getElementById('temperatureInput'),
-            temperatureValue: document.getElementById('temperatureValue'),
-            memoryTagsContainer: document.getElementById('memoryTagsContainer'),
+            memorySearchInput: document.getElementById('memorySearchInput'),
+            memoryCardsContainer: document.getElementById('memoryCardsContainer'),
             newFactInput: document.getElementById('newFactInput'),
             addFactBtn: document.getElementById('addFactBtn'),
             clearMemoryBtn: document.getElementById('clearMemoryBtn'),
             saveApiBtn: document.getElementById('saveApiBtn'),
             closeApiBtn: document.getElementById('closeApiBtn'),
+            closeMemoryModalBtn: document.getElementById('closeMemoryModalBtn'),
             inputSection: document.querySelector('.input-section'),
             historyBtn: document.getElementById('historyBtn'),
             historyModal: document.getElementById('historyModal'),
@@ -687,23 +703,40 @@ class UI {
         this.onPlanEdit = null;
         this.onPlanToggle = null;
         this.onDeleteMemoryFact = null;
+        this.onEditMemoryFact = null;
+        this.allMemoryFacts = [];
+        this.currentSettingsTab = 'api';
     }
 
     bindEvents(handlers) {
-        this.elements.authBtn.addEventListener('click', handlers.onAuthClick);
-        this.elements.settingsBtn.addEventListener('click', handlers.onSettingsClick);
-        this.elements.closeApiBtn.addEventListener('click', handlers.onCloseModal);
-        this.elements.saveApiBtn.addEventListener('click', handlers.onSaveApiKey);
-        this.elements.organizeBtn.addEventListener('click', handlers.onOrganize);
-        this.elements.resetBtn.addEventListener('click', handlers.onReset);
-        this.elements.historyBtn.addEventListener('click', handlers.onHistoryClick);
-        this.elements.closeHistoryBtn.addEventListener('click', handlers.onCloseHistoryModal);
-        this.elements.clearHistoryBtn.addEventListener('click', handlers.onClearHistory);
-        this.elements.micBtn.addEventListener('click', handlers.onMicClick);
-        this.elements.weekBtn.addEventListener('click', handlers.onWeekClick);
-        this.elements.closeWeekBtn.addEventListener('click', handlers.onCloseWeekModal);
-        this.elements.weekPrevBtn.addEventListener('click', handlers.onWeekPrev);
-        this.elements.weekNextBtn.addEventListener('click', handlers.onWeekNext);
+        this.elements.authBtn?.addEventListener('click', handlers.onAuthClick);
+        this.elements.settingsBtn?.addEventListener('click', handlers.onSettingsClick);
+        this.elements.closeApiBtn?.addEventListener('click', handlers.onCloseModal);
+        this.elements.closeSettingsIconBtn?.addEventListener('click', handlers.onCloseModal);
+        this.elements.closeMemoryModalBtn?.addEventListener('click', handlers.onCloseModal);
+        this.elements.saveApiBtn?.addEventListener('click', handlers.onSaveApiKey);
+        this.elements.organizeBtn?.addEventListener('click', handlers.onOrganize);
+        this.elements.resetBtn?.addEventListener('click', handlers.onReset);
+        this.elements.historyBtn?.addEventListener('click', handlers.onHistoryClick);
+        this.elements.closeHistoryBtn?.addEventListener('click', handlers.onCloseHistoryModal);
+        this.elements.clearHistoryBtn?.addEventListener('click', handlers.onClearHistory);
+        this.elements.micBtn?.addEventListener('click', handlers.onMicClick);
+        this.elements.weekBtn?.addEventListener('click', handlers.onWeekClick);
+        this.elements.closeWeekBtn?.addEventListener('click', handlers.onCloseWeekModal);
+        this.elements.weekPrevBtn?.addEventListener('click', handlers.onWeekPrev);
+        this.elements.weekNextBtn?.addEventListener('click', handlers.onWeekNext);
+
+        // Settings Tabs
+        this.elements.tabBtnApi?.addEventListener('click', () => this.switchSettingsTab('api'));
+        this.elements.tabBtnMemory?.addEventListener('click', () => this.switchSettingsTab('memory'));
+
+        // API Key Show/Hide Toggle
+        this.elements.toggleApiKeyVisibility?.addEventListener('click', () => this.togglePasswordVisibility());
+
+        // Memory Search
+        this.elements.memorySearchInput?.addEventListener('input', (e) => {
+            this.renderMemoryCards(this.allMemoryFacts, e.target.value);
+        });
 
         // Backdrop click to close modals
         [
@@ -733,18 +766,59 @@ class UI {
         });
 
         // Follow-up events
-        this.elements.followUpSendBtn.addEventListener('click', handlers.onFollowUpSend);
-        this.elements.followUpMicBtn.addEventListener('click', handlers.onFollowUpMic);
-        this.elements.followUpInput.addEventListener('keydown', (e) => {
+        this.elements.followUpSendBtn?.addEventListener('click', handlers.onFollowUpSend);
+        this.elements.followUpMicBtn?.addEventListener('click', handlers.onFollowUpMic);
+        this.elements.followUpInput?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') handlers.onFollowUpSend();
         });
 
         // Memory events
-        this.elements.addFactBtn.addEventListener('click', handlers.onAddFact);
-        this.elements.newFactInput.addEventListener('keydown', (e) => {
+        this.elements.addFactBtn?.addEventListener('click', handlers.onAddFact);
+        this.elements.newFactInput?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') handlers.onAddFact();
         });
-        this.elements.clearMemoryBtn.addEventListener('click', handlers.onClearMemory);
+        this.elements.clearMemoryBtn?.addEventListener('click', handlers.onClearMemory);
+    }
+
+    switchSettingsTab(tabName) {
+        this.currentSettingsTab = tabName;
+        if (tabName === 'api') {
+            this.elements.tabBtnApi?.classList.add('active');
+            this.elements.tabBtnApi?.setAttribute('aria-selected', 'true');
+            this.elements.tabPanelApi?.classList.add('active');
+
+            this.elements.tabBtnMemory?.classList.remove('active');
+            this.elements.tabBtnMemory?.setAttribute('aria-selected', 'false');
+            this.elements.tabPanelMemory?.classList.remove('active');
+        } else {
+            this.elements.tabBtnMemory?.classList.add('active');
+            this.elements.tabBtnMemory?.setAttribute('aria-selected', 'true');
+            this.elements.tabPanelMemory?.classList.add('active');
+
+            this.elements.tabBtnApi?.classList.remove('active');
+            this.elements.tabBtnApi?.setAttribute('aria-selected', 'false');
+            this.elements.tabPanelApi?.classList.remove('active');
+
+            // Focus search or add input on memory tab
+            setTimeout(() => {
+                this.elements.newFactInput?.focus();
+            }, 100);
+        }
+    }
+
+    togglePasswordVisibility() {
+        const input = this.elements.apiKeyInput;
+        const btn = this.elements.toggleApiKeyVisibility;
+        if (!input || !btn) return;
+        if (input.type === 'password') {
+            input.type = 'text';
+            btn.innerHTML = '<span class="eye-icon">🙈</span>';
+            btn.title = 'Скрыть ключ';
+        } else {
+            input.type = 'password';
+            btn.innerHTML = '<span class="eye-icon">👁️</span>';
+            btn.title = 'Показать ключ';
+        }
     }
 
     updateAuthButton(isLoggedIn) {
@@ -798,45 +872,184 @@ class UI {
     }
 
     showModal(currentKey, baseUrl, primaryModel, fallbackModel, fallbackEnabled, soundEnabled, currentTemperature, memoryFacts) {
-        this.elements.apiKeyInput.value = currentKey || '';
+        if (this.elements.apiKeyInput) {
+            this.elements.apiKeyInput.value = currentKey || '';
+            this.elements.apiKeyInput.type = 'password';
+        }
+        if (this.elements.toggleApiKeyVisibility) {
+            this.elements.toggleApiKeyVisibility.innerHTML = '<span class="eye-icon">👁️</span>';
+            this.elements.toggleApiKeyVisibility.title = 'Показать ключ';
+        }
         if (this.elements.apiBaseUrlInput) {
             this.elements.apiBaseUrlInput.value = baseUrl || 'https://gorouter.app/v1';
         }
-        this.elements.primaryModelSelect.value = primaryModel;
-        this.elements.fallbackModelSelect.value = fallbackModel;
-        this.elements.fallbackCheckbox.checked = fallbackEnabled;
-        this.elements.soundCheckbox.checked = soundEnabled;
-        this.elements.temperatureInput.value = currentTemperature;
-        this.elements.temperatureValue.textContent = currentTemperature;
-        this.renderMemoryTags(memoryFacts);
+        if (this.elements.primaryModelSelect) {
+            this.elements.primaryModelSelect.value = primaryModel;
+        }
+        if (this.elements.fallbackModelSelect) {
+            this.elements.fallbackModelSelect.value = fallbackModel;
+        }
+        if (this.elements.memorySearchInput) {
+            this.elements.memorySearchInput.value = '';
+        }
+        if (this.elements.newFactInput) {
+            this.elements.newFactInput.value = '';
+        }
+
+        this.allMemoryFacts = memoryFacts || [];
+        this.renderMemoryCards(this.allMemoryFacts);
+        this.switchSettingsTab('api');
         this.openModal(this.elements.apiKeyModal);
     }
 
-    renderMemoryTags(facts) {
-        this.elements.memoryTagsContainer.innerHTML = '';
-        if (!facts || facts.length === 0) {
-            this.elements.memoryTagsContainer.innerHTML = '<span class="memory-empty">Дворецкий пока не сохранил фактов о вас. Общайтесь с ним, и он запомнит ваши привычки!</span>';
+    renderMemoryCards(facts, filterQuery = '') {
+        this.allMemoryFacts = facts || [];
+        if (this.elements.memoryCountBadge) {
+            this.elements.memoryCountBadge.textContent = this.allMemoryFacts.length;
+        }
+
+        const container = this.elements.memoryCardsContainer;
+        if (!container) return;
+        container.innerHTML = '';
+
+        if (!this.allMemoryFacts || this.allMemoryFacts.length === 0) {
+            container.innerHTML = `
+                <div class="memory-empty-state">
+                    <div class="memory-empty-icon">🧠</div>
+                    <p class="memory-empty-text">Дворецкий пока не сохранил заметок о вас. Общайтесь с ним, и он запомнит ваши привычки!</p>
+                </div>
+            `;
             return;
         }
 
-        facts.forEach((fact, index) => {
-            const tag = document.createElement('span');
-            tag.className = 'memory-tag';
-            tag.textContent = fact;
+        const q = (filterQuery || '').trim().toLowerCase();
+        const filtered = this.allMemoryFacts
+            .map((fact, index) => ({ fact, index }))
+            .filter(item => !q || item.fact.toLowerCase().includes(q));
 
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'memory-tag-remove';
-            removeBtn.innerHTML = '&times;';
-            removeBtn.title = 'Удалить факт';
-            removeBtn.addEventListener('click', () => {
+        if (filtered.length === 0) {
+            const escapedQuery = this.escapeHtml(filterQuery);
+            container.innerHTML = `
+                <div class="memory-empty-state">
+                    <div class="memory-empty-icon">🔍</div>
+                    <p class="memory-empty-text">По запросу «${escapedQuery}» ничего не найдено.</p>
+                </div>
+            `;
+            return;
+        }
+
+        filtered.forEach(({ fact, index }) => {
+            const card = document.createElement('div');
+            card.className = 'memory-card';
+            card.setAttribute('role', 'listitem');
+
+            const icon = document.createElement('span');
+            icon.className = 'memory-card-icon';
+            icon.textContent = '💭';
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'memory-card-content';
+            textSpan.textContent = fact;
+            textSpan.title = 'Кликните для редактирования';
+
+            const actions = document.createElement('div');
+            actions.className = 'memory-card-actions';
+
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'memory-card-btn edit-btn';
+            editBtn.innerHTML = '✎';
+            editBtn.title = 'Редактировать';
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'memory-card-btn delete-btn';
+            deleteBtn.innerHTML = '&times;';
+            deleteBtn.title = 'Удалить факт';
+
+            const startEditing = () => {
+                card.classList.add('editing');
+                card.innerHTML = '';
+
+                const form = document.createElement('div');
+                form.className = 'memory-edit-form';
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'memory-edit-input';
+                input.value = fact;
+
+                const editActions = document.createElement('div');
+                editActions.className = 'memory-edit-actions';
+
+                const saveBtn = document.createElement('button');
+                saveBtn.type = 'button';
+                saveBtn.className = 'memory-edit-save-btn';
+                saveBtn.textContent = 'Сохранить';
+
+                const cancelBtn = document.createElement('button');
+                cancelBtn.type = 'button';
+                cancelBtn.className = 'memory-edit-cancel-btn';
+                cancelBtn.textContent = 'Отмена';
+
+                const commitEdit = () => {
+                    const newVal = input.value.trim();
+                    if (this.onEditMemoryFact) {
+                        this.onEditMemoryFact(index, newVal);
+                    }
+                };
+
+                const cancelEdit = () => {
+                    this.renderMemoryCards(this.allMemoryFacts, this.elements.memorySearchInput ? this.elements.memorySearchInput.value : '');
+                };
+
+                saveBtn.addEventListener('click', commitEdit);
+                cancelBtn.addEventListener('click', cancelEdit);
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        commitEdit();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelEdit();
+                    }
+                });
+
+                form.appendChild(input);
+                editActions.appendChild(saveBtn);
+                editActions.appendChild(cancelBtn);
+                form.appendChild(editActions);
+                card.appendChild(form);
+
+                input.focus();
+                input.select();
+            };
+
+            textSpan.addEventListener('click', startEditing);
+            editBtn.addEventListener('click', startEditing);
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 if (this.onDeleteMemoryFact) {
                     this.onDeleteMemoryFact(index);
                 }
             });
 
-            tag.appendChild(removeBtn);
-            this.elements.memoryTagsContainer.appendChild(tag);
+            actions.appendChild(editBtn);
+            actions.appendChild(deleteBtn);
+
+            card.appendChild(icon);
+            card.appendChild(textSpan);
+            card.appendChild(actions);
+
+            container.appendChild(card);
         });
+    }
+
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     hideModal(callback) {
@@ -845,13 +1058,13 @@ class UI {
 
     getSettingsValues() {
         return {
-            apiKey: this.elements.apiKeyInput.value.trim(),
+            apiKey: this.elements.apiKeyInput ? this.elements.apiKeyInput.value.trim() : '',
             baseUrl: this.elements.apiBaseUrlInput ? this.elements.apiBaseUrlInput.value.trim() : 'https://gorouter.app/v1',
-            primaryModel: this.elements.primaryModelSelect.value,
-            fallbackModel: this.elements.fallbackModelSelect.value,
-            fallbackEnabled: this.elements.fallbackCheckbox.checked,
-            soundEnabled: this.elements.soundCheckbox.checked,
-            temperature: parseFloat(this.elements.temperatureInput.value)
+            primaryModel: this.elements.primaryModelSelect ? this.elements.primaryModelSelect.value : 'claude-opus-5-thinking',
+            fallbackModel: this.elements.fallbackModelSelect ? this.elements.fallbackModelSelect.value : 'claude-opus-4-8',
+            fallbackEnabled: true,
+            soundEnabled: true,
+            temperature: 0.7
         };
     }
 
@@ -1215,6 +1428,7 @@ class App {
         this.ui.onPlanEdit = (planId, newData) => this.handlePlanEdit(planId, newData);
         this.ui.onPlanToggle = (planId, index, done) => this.handlePlanToggle(planId, index, done);
         this.ui.onDeleteMemoryFact = (index) => this.handleDeleteMemoryFact(index);
+        this.ui.onEditMemoryFact = (index, newText) => this.handleEditMemoryFact(index, newText);
         this.ui.onDeletePlan = (planId) => this.handleDeletePlan(planId);
 
         // One-time clean slate reset of corrupted/duplicate future plans
@@ -1222,10 +1436,6 @@ class App {
             await Storage.clearPlans();
             localStorage.setItem('butler_clean_slate_v3', 'true');
         }
-
-        this.ui.elements.temperatureInput.addEventListener('input', (e) => {
-            this.ui.elements.temperatureValue.textContent = e.target.value;
-        });
 
         this.ui.bindEvents({
             onAuthClick: () => this.handleAuth(),
@@ -1281,25 +1491,33 @@ class App {
         );
     }
 
+    handleEditMemoryFact(index, newText) {
+        const updated = Storage.updateMemoryFact(index, newText);
+        const searchVal = this.ui.elements.memorySearchInput ? this.ui.elements.memorySearchInput.value : '';
+        this.ui.renderMemoryCards(updated, searchVal);
+    }
+
     handleDeleteMemoryFact(index) {
         const updated = Storage.removeMemoryFact(index);
-        this.ui.renderMemoryTags(updated);
+        const searchVal = this.ui.elements.memorySearchInput ? this.ui.elements.memorySearchInput.value : '';
+        this.ui.renderMemoryCards(updated, searchVal);
     }
 
     handleAddFact() {
         const input = this.ui.elements.newFactInput;
-        const text = input.value.trim();
+        const text = input ? input.value.trim() : '';
         if (text) {
             const updated = Storage.addMemoryFacts([text]);
-            this.ui.renderMemoryTags(updated);
-            input.value = '';
+            const searchVal = this.ui.elements.memorySearchInput ? this.ui.elements.memorySearchInput.value : '';
+            this.ui.renderMemoryCards(updated, searchVal);
+            if (input) input.value = '';
         }
     }
 
     handleClearMemory() {
         if (confirm('Очистить все воспоминания Дворецкого?')) {
             Storage.clearMemoryFacts();
-            this.ui.renderMemoryTags([]);
+            this.ui.renderMemoryCards([]);
         }
     }
 

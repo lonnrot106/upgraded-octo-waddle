@@ -103,72 +103,91 @@
     <!-- Modal for Settings -->
     <div id="apiKeyModal" class="modal hidden" role="dialog" aria-labelledby="modalTitle" aria-modal="true">
         <div class="modal-content settings-modal-content">
-            <h2 id="modalTitle">Настройки</h2>
-            <p class="settings-desc">Для работы ИИ-дворецкого нужен ключ GoRouter. Он сохраняется только в вашем браузере.</p>
+            <div class="settings-modal-header">
+                <h2 id="modalTitle">Настройки</h2>
+                <button type="button" id="closeSettingsIconBtn" class="modal-close-icon-btn" title="Закрыть" aria-label="Закрыть">&times;</button>
+            </div>
+
+            <!-- Settings Tabs Navigation -->
+            <div class="settings-tabs" role="tablist">
+                <button type="button" class="settings-tab-btn active" data-tab="api" role="tab" aria-selected="true" id="tabBtnApi">
+                    <span class="tab-icon">🔑</span> Подключение и модели
+                </button>
+                <button type="button" class="settings-tab-btn" data-tab="memory" role="tab" aria-selected="false" id="tabBtnMemory">
+                    <span class="tab-icon">🧠</span> Память Дворецкого
+                    <span id="memoryCountBadge" class="tab-badge">0</span>
+                </button>
+            </div>
             
-            <div class="settings-group">
-                <label for="apiKeyInput" class="settings-label">GoRouter API Key</label>
-                <input type="password" id="apiKeyInput" placeholder="sk-plFp...">
-            </div>
-
-            <div class="settings-group">
-                <label for="apiBaseUrlInput" class="settings-label">API Base URL</label>
-                <input type="text" id="apiBaseUrlInput" placeholder="https://gorouter.app/v1" value="https://gorouter.app/v1">
-            </div>
-
-            <div class="settings-grid">
+            <!-- Tab Panel 1: API & Models -->
+            <div id="tabPanelApi" class="settings-tab-panel active" role="tabpanel" aria-labelledby="tabBtnApi">
+                <p class="settings-desc">Для работы ИИ-дворецкого нужен ключ GoRouter. Он сохраняется только в вашем браузере.</p>
+                
                 <div class="settings-group">
-                    <label for="primaryModelSelect" class="settings-label">Основная модель</label>
-                    <select id="primaryModelSelect">
-                        <option value="claude-opus-5-thinking">claude-opus-5-thinking (умная с рассуждениями)</option>
-                        <option value="claude-opus-5">claude-opus-5</option>
-                        <option value="claude-opus-4-8">claude-opus-4-8</option>
-                    </select>
+                    <label for="apiKeyInput" class="settings-label">GoRouter API Key</label>
+                    <div class="input-with-action">
+                        <input type="password" id="apiKeyInput" placeholder="sk-plFp..." autocomplete="off" spellcheck="false">
+                        <button type="button" id="toggleApiKeyVisibility" class="input-action-btn" title="Показать/скрыть ключ" aria-label="Показать/скрыть ключ">
+                            <span class="eye-icon">👁️</span>
+                        </button>
+                    </div>
                 </div>
+
                 <div class="settings-group">
-                    <label for="fallbackModelSelect" class="settings-label">Резервная (Fallback)</label>
-                    <select id="fallbackModelSelect">
-                        <option value="claude-opus-4-8">claude-opus-4-8 (резервная)</option>
-                        <option value="claude-opus-5">claude-opus-5</option>
-                        <option value="claude-opus-5-thinking">claude-opus-5-thinking</option>
-                    </select>
+                    <label for="apiBaseUrlInput" class="settings-label">API Base URL</label>
+                    <input type="text" id="apiBaseUrlInput" placeholder="https://gorouter.app/v1" value="https://gorouter.app/v1" autocomplete="off" spellcheck="false">
+                </div>
+
+                <div class="settings-grid">
+                    <div class="settings-group">
+                        <label for="primaryModelSelect" class="settings-label">Основная модель</label>
+                        <select id="primaryModelSelect">
+                            <option value="claude-opus-5-thinking">claude-opus-5-thinking (умная с рассуждениями)</option>
+                            <option value="claude-opus-5">claude-opus-5</option>
+                            <option value="claude-opus-4-8">claude-opus-4-8</option>
+                        </select>
+                    </div>
+                    <div class="settings-group">
+                        <label for="fallbackModelSelect" class="settings-label">Резервная (Fallback)</label>
+                        <select id="fallbackModelSelect">
+                            <option value="claude-opus-4-8">claude-opus-4-8 (резервная)</option>
+                            <option value="claude-opus-5">claude-opus-5</option>
+                            <option value="claude-opus-5-thinking">claude-opus-5-thinking</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button id="saveApiBtn" class="primary-btn">Сохранить</button>
+                    <button id="closeApiBtn" class="secondary-btn">Отмена</button>
                 </div>
             </div>
 
-            <div class="settings-options">
-                <label class="toggle-label">
-                    <input type="checkbox" id="fallbackCheckbox" checked>
-                    <span>Автоматический Fallback при 429 / лимитах</span>
-                </label>
-                <label class="toggle-label">
-                    <input type="checkbox" id="soundCheckbox" checked>
-                    <span>Тактильные звуковые эффекты</span>
-                </label>
-            </div>
-
-            <div class="settings-group">
-                <label for="temperatureInput" class="settings-label">Креативность: <span id="temperatureValue">0.7</span></label>
-                <input type="range" id="temperatureInput" min="0" max="1" step="0.1" value="0.7">
-            </div>
-
-            <div class="memory-section">
-                <div class="memory-header">
-                    <label class="settings-label">🧠 Память Дворецкого</label>
-                    <button id="clearMemoryBtn" class="clear-memory-btn" title="Очистить все заметки">Очистить память</button>
+            <!-- Tab Panel 2: Memory -->
+            <div id="tabPanelMemory" class="settings-tab-panel" role="tabpanel" aria-labelledby="tabBtnMemory">
+                <div class="memory-tab-header">
+                    <p class="memory-subtext">Факты и привычки, которые Дворецкий запоминает во время общения и учитывает при составлении расписания:</p>
+                    <button id="clearMemoryBtn" class="clear-memory-btn" title="Очистить все воспоминания">
+                        <span>🗑️ Очистить всё</span>
+                    </button>
                 </div>
-                <p class="memory-subtext">Факты и привычки, которые Дворецкий запоминает автоматически во время диалогов:</p>
-                <div id="memoryTagsContainer" class="memory-tags-container">
-                    <!-- Dynamic memory tags inserted here -->
+
+                <div class="memory-search-wrapper">
+                    <input type="text" id="memorySearchInput" placeholder="🔍 Поиск по воспоминаниям..." autocomplete="off">
                 </div>
+
+                <div id="memoryCardsContainer" class="memory-cards-container" role="list">
+                    <!-- Dynamic memory cards will be inserted here -->
+                </div>
+
                 <div class="add-memory-row">
-                    <input type="text" id="newFactInput" placeholder="Добавить факт вручную (например: 'Люблю киберпанк')">
-                    <button id="addFactBtn" class="secondary-btn add-fact-btn">+ Добавить</button>
+                    <input type="text" id="newFactInput" placeholder="Добавить факт вручную (например: 'Люблю киберпанк')" autocomplete="off">
+                    <button id="addFactBtn" class="primary-btn add-fact-btn">+ Добавить</button>
                 </div>
-            </div>
 
-            <div class="modal-actions">
-                <button id="saveApiBtn" class="primary-btn">Сохранить</button>
-                <button id="closeApiBtn" class="secondary-btn">Отмена</button>
+                <div class="modal-actions memory-modal-actions">
+                    <button id="closeMemoryModalBtn" class="secondary-btn">Закрыть</button>
+                </div>
             </div>
         </div>
     </div>
