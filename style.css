@@ -412,33 +412,60 @@ button {
 
 /* Week View */
 .week-modal-content {
-    max-width: 720px;
+    max-width: 1040px;
+    width: 95vw;
+    box-sizing: border-box;
 }
 
 .week-nav {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 1rem;
+    margin-bottom: 1.25rem;
 }
 
 .week-label {
     font-weight: 600;
+    font-size: 1rem;
+}
+
+.week-days-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.5rem;
+    box-sizing: border-box;
+}
+
+.week-days-wrapper::-webkit-scrollbar {
+    height: 6px;
+}
+
+.week-days-wrapper::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
 }
 
 .week-days {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 0.5rem;
+    grid-template-columns: repeat(7, minmax(130px, 1fr));
+    gap: 0.6rem;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .week-day {
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 0.5rem;
-    min-height: 90px;
+    padding: 0.65rem 0.5rem;
+    min-height: 120px;
+    min-width: 0;
     background: rgba(255, 255, 255, 0.03);
     transition: transform 0.2s var(--ease-spring), border-color 0.2s ease, background-color 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .week-day:hover {
@@ -449,14 +476,19 @@ button {
 
 .week-day.today {
     border-color: var(--primary-color, #4ade80);
+    background: rgba(74, 222, 128, 0.04);
 }
 
 .week-day-header {
-    font-size: 0.75rem;
+    font-size: 0.78rem;
     font-weight: 600;
     text-transform: uppercase;
     color: var(--secondary-text);
     margin-bottom: 0.5rem;
+    white-space: nowrap;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 0.35rem;
 }
 
 .week-day.today .week-day-header {
@@ -467,14 +499,23 @@ button {
     font-size: 0.75rem;
     color: var(--secondary-text);
     opacity: 0.6;
+    text-align: center;
+    margin: auto 0;
 }
 
 .week-task {
-    font-size: 0.8rem;
-    padding: 0.25rem 0;
+    font-size: 0.78rem;
+    padding: 0.35rem 0;
     border-bottom: 1px dashed var(--border-color);
     cursor: pointer;
-    line-height: 1.25;
+    line-height: 1.35;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+}
+
+.week-task:last-child {
+    border-bottom: none;
 }
 
 .week-task:hover {
@@ -485,6 +526,7 @@ button {
     font-weight: 600;
     margin-right: 0.25rem;
     white-space: nowrap;
+    display: inline;
 }
 
 .week-task.done {
