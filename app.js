@@ -311,6 +311,25 @@ class Storage {
         }
     }
 
+    static async deletePlan(planId) {
+        if (!isFirebaseMocked && auth && auth.currentUser) {
+            try {
+                const docRef = doc(db, `users/${auth.currentUser.uid}/plans`, planId);
+                await deleteDoc(docRef);
+            } catch (e) {
+                console.error("Failed to delete plan from Firestore", e);
+            }
+        }
+        const local = localStorage.getItem('butler_plans');
+        if (local) {
+            try {
+                const plans = JSON.parse(local);
+                const remaining = plans.filter(p => p.id !== planId);
+                localStorage.setItem('butler_plans', JSON.stringify(remaining));
+            } catch (e) {}
+        }
+    }
+
     static async clearPlans() {
         if (!isFirebaseMocked && auth && auth.currentUser) {
             const q = query(collection(db, `users/${auth.currentUser.uid}/plans`));
@@ -318,9 +337,8 @@ class Storage {
             snapshot.forEach(async d => {
                 await deleteDoc(doc(db, `users/${auth.currentUser.uid}/plans`, d.id));
             });
-        } else {
-            localStorage.removeItem('butler_plans');
         }
+        localStorage.removeItem('butler_plans');
     }
 
     static subscribePlans(onUpdate) {
@@ -465,7 +483,18 @@ class API {
             cleaned = cleaned.slice(start, end + 1);
         }
 
-        return JSON.parse(cleaned);
+        const parsed = JSON.parse(cleaned);
+
+        // Ensure schedule is sorted chronologically
+        if (parsed.schedule && Array.isArray(parsed.schedule)) {
+            parsed.schedule.sort((a, b) => {
+                const timeA = (a.time || '').match(/\d{1,2}:\d{2}/)?.[0] || '99:99';
+                const timeB = (b.time || '').match(/\d{1,2}:\d{2}/)?.[0] || '99:99';
+                return timeA.localeCompare(timeB);
+            });
+        }
+
+        return parsed;
     }
 
     async callChatModel(modelName, systemPrompt, userPrompt, apiKey) {
@@ -631,7 +660,6 @@ class UI {
             recType: document.getElementById('recType'),
             recTitle: document.getElementById('recTitle'),
             recDescription: document.getElementById('recDescription'),
-            modelBadge: document.getElementById('modelBadge'),
             followUpInput: document.getElementById('followUpInput'),
             followUpMicBtn: document.getElementById('followUpMicBtn'),
             followUpSendBtn: document.getElementById('followUpSendBtn'),
@@ -900,14 +928,14 @@ class UI {
         this.currentData = data;
         this.elements.repeatToggle.classList.toggle('active', !!repeat);
         this.elements.repeatToggle.dataset.repeatKey = repeatKey || '';
-        
-        // Model badge
-        if (modelUsed) {
-            this.elements.modelBadge.textContent = usedFallback ? `⚡ Fallback: ${modelUsed}` : modelUsed;
-            this.elements.modelBadge.classList.toggle('fallback', !!usedFallback);
-            this.elements.modelBadge.classList.remove('hidden');
-        } else {
-            this.elements.modelBadge.classList.add('hidden');
+
+        // Ensure schedule is sorted chronologically
+        if (data.schedule && Array.isArray(data.schedule)) {
+            data.schedule.sort((a, b) => {
+                const timeA = (a.time || '').match(/\d{1,2}:\d{2}/)?.[0] || '99:99';
+                const timeB = (b.time || '').match(/\d{1,2}:\d{2}/)?.[0] || '99:99';
+                return timeA.localeCompare(timeB);
+            });
         }
 
         this.elements.scheduleList.innerHTML = '';
@@ -1018,7 +1046,7 @@ class UI {
     renderHistoryList(plans) {
         this.elements.historyListContainer.innerHTML = '';
 
-        if (plans.length === 0) {
+        if (!plans || plans.length === 0) {
             this.elements.historyListContainer.innerHTML = '<p class="history-empty">История пуста</p>';
         } else {
             plans.forEach(plan => {
@@ -1031,10 +1059,23 @@ class UI {
                 
                 const promptSpan = document.createElement('span');
                 promptSpan.className = 'history-item-prompt';
-                promptSpan.textContent = plan.prompt;
+                promptSpan.textContent = plan.prompt || '(Без описания)';
                 
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'history-item-delete';
+                deleteBtn.innerHTML = '&times;';
+                deleteBtn.title = 'Удалить этот план';
+                deleteBtn.setAttribute('aria-label', 'Удалить план');
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (this.onDeletePlan) {
+                        this.onDeletePlan(plan.id);
+                    }
+                });
+
                 itemDiv.appendChild(dateSpan);
                 itemDiv.appendChild(promptSpan);
+                itemDiv.appendChild(deleteBtn);
                 
                 itemDiv.addEventListener('click', () => {
                     if (this.onHistoryPlanClick) this.onHistoryPlanClick(plan);
@@ -1087,6 +1128,13 @@ class UI {
             dayDiv.appendChild(header);
 
             const tasks = tasksByDay[dateStr] || [];
+            // Sort tasks chronologically by start time
+            tasks.sort((a, b) => {
+                const timeA = (a.item.time || '').match(/\d{1,2}:\d{2}/)?.[0] || '99:99';
+                const timeB = (b.item.time || '').match(/\d{1,2}:\d{2}/)?.[0] || '99:99';
+                return timeA.localeCompare(timeB);
+            });
+
             if (tasks.length === 0) {
                 const empty = document.createElement('div');
                 empty.className = 'week-day-empty';
@@ -1131,6 +1179,7 @@ class App {
         this.ui.onPlanToggle = (planId, index, done) => this.handlePlanToggle(planId, index, done);
         this.ui.onRepeatToggle = (enabled) => this.handleRepeatToggle(enabled);
         this.ui.onDeleteMemoryFact = (index) => this.handleDeleteMemoryFact(index);
+        this.ui.onDeletePlan = (planId) => this.handleDeletePlan(planId);
 
         this.ui.elements.repeatToggle.addEventListener('click', () => {
             const enabled = !this.ui.elements.repeatToggle.classList.contains('active');
@@ -1309,6 +1358,22 @@ class App {
         await Storage.clearPlans();
         this.plans = [];
         this.ui.renderHistoryList([]);
+        if (this.weekModalOpen) {
+            this.renderWeek();
+        }
+    }
+
+    async handleDeletePlan(planId) {
+        if (!planId) return;
+        await Storage.deletePlan(planId);
+        this.plans = this.plans.filter(p => p.id !== planId);
+        this.ui.renderHistoryList(this.plans);
+        if (this.weekModalOpen) {
+            this.renderWeek();
+        }
+        if (this.ui.currentPlanId === planId) {
+            this.ui.resetView();
+        }
     }
 
     async handleWeekClick() {

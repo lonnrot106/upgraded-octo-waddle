@@ -675,7 +675,8 @@ button {
 }
 
 .history-item {
-    padding: 1rem;
+    position: relative;
+    padding: 1rem 3rem 1rem 1rem;
     border: 1px solid var(--border-color);
     border-radius: 8px;
     margin-bottom: 1rem;
@@ -702,6 +703,35 @@ button {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.history-item-delete {
+    position: absolute;
+    top: 50%;
+    right: 0.75rem;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--secondary-text);
+    font-size: 1.35rem;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+}
+
+.history-item:hover .history-item-delete {
+    opacity: 1;
+}
+
+.history-item-delete:hover {
+    color: #ef4444;
+    background-color: rgba(239, 68, 68, 0.12);
 }
 
 .history-empty {
