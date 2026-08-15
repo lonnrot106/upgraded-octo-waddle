@@ -58,7 +58,6 @@
                     <div class="schedule-container">
                         <div class="schedule-head">
                             <h2>Расписание</h2>
-                            <button id="repeatToggle" class="repeat-toggle" title="Повторять это расписание каждый день">Повторять ежедневно</button>
                         </div>
                         <div id="dayProgress" class="day-progress hidden">
                             <div class="day-progress-bar"><div id="dayProgressFill" class="day-progress-fill"></div></div>
@@ -197,9 +196,16 @@
                 <span id="weekLabel" class="week-label"></span>
                 <button id="weekNextBtn" class="icon-btn" title="Следующая неделя" aria-label="Следующая неделя">&rarr;</button>
             </div>
-            <div class="week-days-wrapper">
-                <div id="weekDays" class="week-days">
-                    <!-- Days will be injected here -->
+            <div id="weekDaysBar" class="week-days-bar">
+                <!-- 7 interactive day tabs injected by JS -->
+            </div>
+            <div class="week-day-detail">
+                <div class="week-day-detail-header">
+                    <span id="weekDayDetailTitle" class="week-day-detail-title"></span>
+                    <button id="weekLoadPlanBtn" class="secondary-btn week-load-plan-btn hidden">Открыть план</button>
+                </div>
+                <div id="weekTasksList" class="week-tasks-list">
+                    <!-- Tasks for selected day injected by JS -->
                 </div>
             </div>
             <div class="modal-actions">

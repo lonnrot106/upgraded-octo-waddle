@@ -412,8 +412,8 @@ button {
 
 /* Week View */
 .week-modal-content {
-    max-width: 1040px;
-    width: 95vw;
+    max-width: 520px;
+    width: 92%;
     box-sizing: border-box;
 }
 
@@ -426,112 +426,165 @@ button {
 
 .week-label {
     font-weight: 600;
-    font-size: 1rem;
+    font-size: 0.95rem;
+    letter-spacing: 0.01em;
 }
 
-.week-days-wrapper {
-    width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 0.5rem;
-    box-sizing: border-box;
+.week-days-bar {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.4rem;
+    margin-bottom: 1.25rem;
+    background: rgba(255, 255, 255, 0.02);
+    padding: 0.35rem;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
 }
 
-.week-days-wrapper::-webkit-scrollbar {
-    height: 6px;
+.week-day-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 0.2rem;
+    border-radius: 7px;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    user-select: none;
+    position: relative;
 }
 
-.week-days-wrapper::-webkit-scrollbar-thumb {
+.week-day-tab:hover {
+    background: var(--hover-bg);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.week-day-tab.active {
+    background: var(--text-color);
+    color: var(--bg-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.week-day-tab.today:not(.active) {
+    border-color: var(--primary-color, #4ade80);
+    color: var(--primary-color, #4ade80);
+}
+
+.week-day-tab-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    line-height: 1.1;
+    margin-bottom: 0.2rem;
+}
+
+.week-day-tab-num {
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.week-day-tab-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--primary-color, #4ade80);
+    margin-top: 0.25rem;
+    opacity: 0.9;
+}
+
+.week-day-tab.active .week-day-tab-dot {
+    background: var(--bg-color);
+}
+
+.week-day-detail {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1.25rem;
+    min-height: 200px;
+    max-height: 50vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.week-day-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.week-day-detail-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.week-load-plan-btn {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+}
+
+.week-tasks-list {
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding-right: 0.25rem;
+}
+
+.week-tasks-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.week-tasks-list::-webkit-scrollbar-thumb {
     background: var(--border-color);
     border-radius: 3px;
 }
 
-.week-days {
-    display: grid;
-    grid-template-columns: repeat(7, minmax(130px, 1fr));
-    gap: 0.6rem;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.week-day {
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 0.65rem 0.5rem;
-    min-height: 120px;
-    min-width: 0;
-    background: rgba(255, 255, 255, 0.03);
-    transition: transform 0.2s var(--ease-spring), border-color 0.2s ease, background-color 0.2s ease;
+.week-task-item {
     display: flex;
-    flex-direction: column;
-    box-sizing: border-box;
-    overflow: hidden;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.88rem;
+    line-height: 1.35;
 }
 
-.week-day:hover {
-    transform: translateY(-2px);
-    border-color: rgba(255, 255, 255, 0.2);
-    background: rgba(255, 255, 255, 0.05);
+.week-task-item.done {
+    opacity: 0.5;
 }
 
-.week-day.today {
-    border-color: var(--primary-color, #4ade80);
-    background: rgba(74, 222, 128, 0.04);
+.week-task-item.done .week-task-item-name {
+    text-decoration: line-through;
 }
 
-.week-day-header {
-    font-size: 0.78rem;
+.week-task-item-time {
     font-weight: 600;
-    text-transform: uppercase;
-    color: var(--secondary-text);
-    margin-bottom: 0.5rem;
-    white-space: nowrap;
-    text-align: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    padding-bottom: 0.35rem;
-}
-
-.week-day.today .week-day-header {
     color: var(--primary-color, #4ade80);
+    white-space: nowrap;
+    font-size: 0.85rem;
 }
 
-.week-day-empty {
-    font-size: 0.75rem;
+.week-task-item-name {
+    flex: 1;
+    word-break: break-word;
+}
+
+.week-no-tasks {
     color: var(--secondary-text);
-    opacity: 0.6;
+    font-size: 0.9rem;
     text-align: center;
     margin: auto 0;
-}
-
-.week-task {
-    font-size: 0.78rem;
-    padding: 0.35rem 0;
-    border-bottom: 1px dashed var(--border-color);
-    cursor: pointer;
-    line-height: 1.35;
-    word-break: break-word;
-    overflow-wrap: break-word;
-    hyphens: auto;
-}
-
-.week-task:last-child {
-    border-bottom: none;
-}
-
-.week-task:hover {
-    color: var(--primary-color, #4ade80);
-}
-
-.week-task-time {
-    font-weight: 600;
-    margin-right: 0.25rem;
-    white-space: nowrap;
-    display: inline;
-}
-
-.week-task.done {
-    text-decoration: line-through;
-    opacity: 0.45;
+    padding: 2rem 0;
 }
 
 /* Recommendation Card */

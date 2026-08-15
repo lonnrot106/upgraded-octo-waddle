@@ -297,20 +297,6 @@ class Storage {
         }
     }
 
-    static async deletePlansByKey(repeatKey) {
-        if (!isFirebaseMocked && auth && auth.currentUser) {
-            const q = query(collection(db, `users/${auth.currentUser.uid}/plans`), where('repeatKey', '==', repeatKey));
-            const snapshot = await getDocs(q);
-            snapshot.forEach(async d => {
-                await deleteDoc(doc(db, `users/${auth.currentUser.uid}/plans`, d.id));
-            });
-        } else {
-            const plans = await this.getPlans();
-            const remaining = plans.filter(p => p.repeatKey !== repeatKey);
-            localStorage.setItem('butler_plans', JSON.stringify(remaining));
-        }
-    }
-
     static async deletePlan(planId) {
         if (!isFirebaseMocked && auth && auth.currentUser) {
             try {
@@ -332,11 +318,15 @@ class Storage {
 
     static async clearPlans() {
         if (!isFirebaseMocked && auth && auth.currentUser) {
-            const q = query(collection(db, `users/${auth.currentUser.uid}/plans`));
-            const snapshot = await getDocs(q);
-            snapshot.forEach(async d => {
-                await deleteDoc(doc(db, `users/${auth.currentUser.uid}/plans`, d.id));
-            });
+            try {
+                const q = query(collection(db, `users/${auth.currentUser.uid}/plans`));
+                const snapshot = await getDocs(q);
+                snapshot.forEach(async d => {
+                    await deleteDoc(doc(db, `users/${auth.currentUser.uid}/plans`, d.id));
+                });
+            } catch (e) {
+                console.error("Failed to clear plans in Firestore", e);
+            }
         }
         localStorage.removeItem('butler_plans');
     }
@@ -653,7 +643,6 @@ class UI {
             loader: document.getElementById('loader'),
             outputContent: document.getElementById('outputContent'),
             scheduleList: document.getElementById('scheduleList'),
-            repeatToggle: document.getElementById('repeatToggle'),
             dayProgress: document.getElementById('dayProgress'),
             dayProgressFill: document.getElementById('dayProgressFill'),
             dayProgressText: document.getElementById('dayProgressText'),
@@ -686,7 +675,10 @@ class UI {
             closeHistoryBtn: document.getElementById('closeHistoryBtn'),
             weekBtn: document.getElementById('weekBtn'),
             weekModal: document.getElementById('weekModal'),
-            weekDays: document.getElementById('weekDays'),
+            weekDaysBar: document.getElementById('weekDaysBar'),
+            weekDayDetailTitle: document.getElementById('weekDayDetailTitle'),
+            weekLoadPlanBtn: document.getElementById('weekLoadPlanBtn'),
+            weekTasksList: document.getElementById('weekTasksList'),
             weekLabel: document.getElementById('weekLabel'),
             weekPrevBtn: document.getElementById('weekPrevBtn'),
             weekNextBtn: document.getElementById('weekNextBtn'),
@@ -694,7 +686,6 @@ class UI {
         };
         this.onPlanEdit = null;
         this.onPlanToggle = null;
-        this.onRepeatToggle = null;
         this.onDeleteMemoryFact = null;
     }
 
@@ -923,11 +914,9 @@ class UI {
         }
     }
 
-    renderResults(data, planId, repeat, repeatKey, usedFallback = false, modelUsed = '') {
+    renderResults(data, planId) {
         this.currentPlanId = planId;
         this.currentData = data;
-        this.elements.repeatToggle.classList.toggle('active', !!repeat);
-        this.elements.repeatToggle.dataset.repeatKey = repeatKey || '';
 
         // Ensure schedule is sorted chronologically
         if (data.schedule && Array.isArray(data.schedule)) {
@@ -1098,63 +1087,109 @@ class UI {
         this.closeModal(this.elements.weekModal, callback);
     }
 
-    renderWeekDays(plans, monday, onPlanClick) {
-        this.elements.weekDays.innerHTML = '';
+    renderWeekView(plans, monday, selectedDayIndex, onSelectDay, onLoadPlan) {
+        this.elements.weekDaysBar.innerHTML = '';
+        this.elements.weekTasksList.innerHTML = '';
+
         const todayStr = Storage.localDateString(Date.now());
         const dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+        const fullDayNames = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
+        const monthNames = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
         const tasksByDay = {};
-        plans.forEach(plan => {
+        const planByDay = {};
+        (plans || []).forEach(plan => {
             const date = Storage.planDate(plan);
+            if (!planByDay[date]) planByDay[date] = plan;
             const items = (plan.data && plan.data.schedule) || [];
             items.forEach(item => {
                 if (!tasksByDay[date]) tasksByDay[date] = [];
-                tasksByDay[date].push({ plan, item });
+                tasksByDay[date].push(item);
             });
         });
 
+        // 1. Render 7 day tabs
         for (let i = 0; i < 7; i++) {
             const day = new Date(monday);
             day.setDate(monday.getDate() + i);
             const dateStr = Storage.localDateString(day.getTime());
             const isToday = dateStr === todayStr;
+            const isSelected = i === selectedDayIndex;
+            const hasTasks = (tasksByDay[dateStr] || []).length > 0;
 
-            const dayDiv = document.createElement('div');
-            dayDiv.className = 'week-day' + (isToday ? ' today' : '');
+            const tab = document.createElement('div');
+            tab.className = `week-day-tab${isSelected ? ' active' : ''}${isToday ? ' today' : ''}`;
+            tab.setAttribute('role', 'button');
+            tab.setAttribute('tabindex', '0');
+            tab.title = `${fullDayNames[i]}, ${day.getDate()} ${monthNames[day.getMonth()]}`;
 
-            const header = document.createElement('div');
-            header.className = 'week-day-header';
-            header.textContent = `${dayNames[i]} ${day.getDate()}.${String(day.getMonth() + 1).padStart(2, '0')}`;
-            dayDiv.appendChild(header);
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'week-day-tab-name';
+            nameSpan.textContent = dayNames[i];
 
-            const tasks = tasksByDay[dateStr] || [];
-            // Sort tasks chronologically by start time
-            tasks.sort((a, b) => {
-                const timeA = (a.item.time || '').match(/\d{1,2}:\d{2}/)?.[0] || '99:99';
-                const timeB = (b.item.time || '').match(/\d{1,2}:\d{2}/)?.[0] || '99:99';
-                return timeA.localeCompare(timeB);
-            });
+            const numSpan = document.createElement('span');
+            numSpan.className = 'week-day-tab-num';
+            numSpan.textContent = day.getDate();
 
-            if (tasks.length === 0) {
-                const empty = document.createElement('div');
-                empty.className = 'week-day-empty';
-                empty.textContent = 'Пусто';
-                dayDiv.appendChild(empty);
-            } else {
-                tasks.forEach(({ plan, item }) => {
-                    const task = document.createElement('div');
-                    task.className = 'week-task' + (item.done ? ' done' : '');
-                    const timeSpan = document.createElement('span');
-                    timeSpan.className = 'week-task-time';
-                    timeSpan.textContent = (item.time || '').split(' - ')[0].trim();
-                    task.appendChild(timeSpan);
-                    task.appendChild(document.createTextNode(item.task || ''));
-                    task.addEventListener('click', () => onPlanClick(plan));
-                    dayDiv.appendChild(task);
-                });
+            tab.appendChild(nameSpan);
+            tab.appendChild(numSpan);
+
+            if (hasTasks) {
+                const dot = document.createElement('div');
+                dot.className = 'week-day-tab-dot';
+                tab.appendChild(dot);
             }
 
-            this.elements.weekDays.appendChild(dayDiv);
+            tab.addEventListener('click', () => onSelectDay(i));
+            this.elements.weekDaysBar.appendChild(tab);
+        }
+
+        // 2. Render selected day header & tasks
+        const selectedDay = new Date(monday);
+        selectedDay.setDate(monday.getDate() + selectedDayIndex);
+        const selectedDateStr = Storage.localDateString(selectedDay.getTime());
+        const selectedTasks = tasksByDay[selectedDateStr] || [];
+        const planForSelectedDay = planByDay[selectedDateStr];
+
+        this.elements.weekDayDetailTitle.textContent = `${fullDayNames[selectedDayIndex]}, ${selectedDay.getDate()} ${monthNames[selectedDay.getMonth()]}`;
+
+        // "Open Plan" button
+        if (planForSelectedDay && onLoadPlan) {
+            this.elements.weekLoadPlanBtn.classList.remove('hidden');
+            this.elements.weekLoadPlanBtn.onclick = () => onLoadPlan(planForSelectedDay);
+        } else {
+            this.elements.weekLoadPlanBtn.classList.add('hidden');
+        }
+
+        // Sort tasks chronologically
+        selectedTasks.sort((a, b) => {
+            const timeA = (a.time || '').match(/\d{1,2}:\d{2}/)?.[0] || '99:99';
+            const timeB = (b.time || '').match(/\d{1,2}:\d{2}/)?.[0] || '99:99';
+            return timeA.localeCompare(timeB);
+        });
+
+        if (selectedTasks.length === 0) {
+            const emptyDiv = document.createElement('div');
+            emptyDiv.className = 'week-no-tasks';
+            emptyDiv.textContent = 'На этот день планов нет';
+            this.elements.weekTasksList.appendChild(emptyDiv);
+        } else {
+            selectedTasks.forEach(task => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = `week-task-item${task.done ? ' done' : ''}`;
+
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'week-task-item-time';
+                timeSpan.textContent = task.time || '';
+
+                const textSpan = document.createElement('span');
+                textSpan.className = 'week-task-item-name';
+                textSpan.textContent = task.task || '';
+
+                itemDiv.appendChild(timeSpan);
+                itemDiv.appendChild(textSpan);
+                this.elements.weekTasksList.appendChild(itemDiv);
+            });
         }
     }
 }
@@ -1168,23 +1203,25 @@ class App {
         this.ui = new UI();
         this.apiKey = Storage.getApiKey();
         this.plans = [];
+        this.weekOffset = 0;
+        this.weekSelectedDayIndex = (new Date().getDay() + 6) % 7;
         
         this.speech = new SpeechService();
 
         this.init();
     }
 
-    init() {
+    async init() {
         this.ui.onPlanEdit = (planId, newData) => this.handlePlanEdit(planId, newData);
         this.ui.onPlanToggle = (planId, index, done) => this.handlePlanToggle(planId, index, done);
-        this.ui.onRepeatToggle = (enabled) => this.handleRepeatToggle(enabled);
         this.ui.onDeleteMemoryFact = (index) => this.handleDeleteMemoryFact(index);
         this.ui.onDeletePlan = (planId) => this.handleDeletePlan(planId);
 
-        this.ui.elements.repeatToggle.addEventListener('click', () => {
-            const enabled = !this.ui.elements.repeatToggle.classList.contains('active');
-            if (this.ui.onRepeatToggle) this.ui.onRepeatToggle(enabled);
-        });
+        // One-time clean slate reset of corrupted/duplicate future plans
+        if (!localStorage.getItem('butler_clean_slate_v3')) {
+            await Storage.clearPlans();
+            localStorage.setItem('butler_clean_slate_v3', 'true');
+        }
 
         this.ui.elements.temperatureInput.addEventListener('input', (e) => {
             this.ui.elements.temperatureValue.textContent = e.target.value;
@@ -1217,6 +1254,10 @@ class App {
                 if (this.unsubscribe) { this.unsubscribe(); this.unsubscribe = null; }
                 this.plans = [];
                 if (user) {
+                    if (!localStorage.getItem(`butler_clean_slate_v3_${user.uid}`)) {
+                        await Storage.clearPlans();
+                        localStorage.setItem(`butler_clean_slate_v3_${user.uid}`, 'true');
+                    }
                     this.unsubscribe = Storage.subscribePlans((plans) => this.handlePlansUpdate(plans));
                     await Storage.loadMemoryFromCloud();
                 }
@@ -1381,6 +1422,7 @@ class App {
         this.historyModalOpen = false;
         this.ui.hideHistoryModal();
         this.weekOffset = 0;
+        this.weekSelectedDayIndex = (new Date().getDay() + 6) % 7;
         if (this.plans.length === 0) {
             this.plans = await Storage.getPlans();
         }
@@ -1399,7 +1441,16 @@ class App {
         sunday.setDate(monday.getDate() + 6);
         this.ui.elements.weekLabel.textContent = `${Storage.localDateString(monday.getTime())} — ${Storage.localDateString(sunday.getTime())}`;
 
-        this.ui.renderWeekDays(this.plans, monday, (plan) => this.handleLoadHistoricalPlan(plan));
+        this.ui.renderWeekView(
+            this.plans,
+            monday,
+            this.weekSelectedDayIndex,
+            (newIndex) => {
+                this.weekSelectedDayIndex = newIndex;
+                this.renderWeek();
+            },
+            (plan) => this.handleLoadHistoricalPlan(plan)
+        );
     }
 
     handleLoadHistoricalPlan(plan) {
@@ -1409,7 +1460,7 @@ class App {
         this.ui.hideWeekModal();
         this.ui.showLoader();
         setTimeout(() => {
-            this.ui.renderResults(plan.data, plan.id, plan.repeat, plan.repeatKey);
+            this.ui.renderResults(plan.data, plan.id);
             NotificationService.scheduleNotifications(plan.data.schedule);
         }, 300);
     }
@@ -1444,37 +1495,6 @@ class App {
         await Storage.updatePlan(planId, { data });
     }
 
-    async handleRepeatToggle(enabled) {
-        const planId = this.ui.currentPlanId;
-        if (!planId) return;
-        if (this.plans.length === 0) {
-            this.plans = await Storage.getPlans();
-        }
-        const current = this.plans.find(p => p.id === planId);
-        if (!current) return;
-
-        if (enabled) {
-            const repeatKey = Date.now().toString();
-            await Storage.updatePlan(planId, { repeat: true, repeatKey });
-            for (let i = 1; i <= 6; i++) {
-                const copyDate = new Date();
-                copyDate.setDate(copyDate.getDate() + i);
-                await Storage.savePlan({
-                    timestamp: Date.now(),
-                    prompt: current.prompt || '',
-                    data: JSON.parse(JSON.stringify(current.data)),
-                    repeat: true,
-                    repeatKey,
-                    date: Storage.localDateString(copyDate.getTime())
-                });
-            }
-        } else {
-            const oldKey = this.ui.elements.repeatToggle.dataset.repeatKey || current.repeatKey;
-            await Storage.updatePlan(planId, { repeat: false, repeatKey: null });
-            if (oldKey) await Storage.deletePlansByKey(oldKey);
-        }
-    }
-
     async handleOrganize() {
         const text = this.ui.getBraindumpText();
         
@@ -1505,7 +1525,7 @@ class App {
                 data: responseData
             });
 
-            this.ui.renderResults(responseData, savedPlan.id, false, null, result.usedFallback, result.modelUsed);
+            this.ui.renderResults(responseData, savedPlan.id);
             NotificationService.scheduleNotifications(responseData.schedule);
             
         } catch (error) {
@@ -1543,14 +1563,14 @@ class App {
 
             await Storage.updatePlan(planId, { data: updatedData });
 
-            this.ui.renderResults(updatedData, planId, this.ui.elements.repeatToggle.classList.contains('active'), this.ui.elements.repeatToggle.dataset.repeatKey, result.usedFallback, result.modelUsed);
+            this.ui.renderResults(updatedData, planId);
             NotificationService.scheduleNotifications(updatedData.schedule);
 
         } catch (error) {
             console.error(error);
             this.ui.showError(error.message);
             if (this.ui.currentData) {
-                this.ui.renderResults(this.ui.currentData, planId, false, null);
+                this.ui.renderResults(this.ui.currentData, planId);
             }
         }
     }
